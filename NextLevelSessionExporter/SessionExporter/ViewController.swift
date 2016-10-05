@@ -24,6 +24,7 @@
 //
 
 import UIKit
+import AVFoundation
 
 class ViewController: UIViewController {
 
@@ -31,7 +32,43 @@ class ViewController: UIViewController {
         super.viewDidLoad()
 
         // TODO setup session exporter test
-    }
 
+        let asset = AVAsset(url: URL(fileURLWithPath: "file.mp4"))
+        
+        let encoder = NextLevelSessionExporter(withAsset: asset)
+        encoder.delegate = self
+        encoder.outputFileType = AVFileTypeMPEG4
+        encoder.outputURL = URL(fileURLWithPath: NSHomeDirectory())
+        
+        //encoder.videoOutputConfiguration
+        //encoder.audioOutputConfiguration
+        
+        do {
+            try encoder.export(withCompletionHandler: { () in
+                
+                switch encoder.status {
+                case .completed:
+                    print("video export completed")
+                    break
+                case .cancelled:
+                    print("video export cancelled")
+                    break
+                default:
+                    break
+                }
+            })
+        } catch {
+            print("Failed to export")
+        }
+    }
+}
+
+extension ViewController: NextLevelSessionExporterDelegate {
+    func sessionExporter(_ sessionExporter: NextLevelSessionExporter, didUpdateProgress progress: Float) {
+        // update progress
+    }
+    
+    func sessionExporter(_ sessionExporter: NextLevelSessionExporter, didRenderFrame renderFrame: CVPixelBuffer, withPresentationTime presentationTime: CMTime, toRenderBuffer renderBuffer: CVPixelBuffer) {
+    }
 }
 

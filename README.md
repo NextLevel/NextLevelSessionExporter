@@ -1,10 +1,9 @@
-`NextLevelSessionExporter` will be open sourced soon, check back shortly.
 
 ## NextLevelSessionExporter 🔄
 
 `NextLevelSessionExporter` is an export and transcode media library for iOS written in [Swift](https://developer.apple.com/swift/).
 
-The component was inspired by [SDAVAssetExportSession](https://github.com/rs/SDAVAssetExportSession) and [SCAssetExportSession](https://github.com/rFlex/SCRecorder/blob/master/Library/Sources/SCAssetExportSession.h) which are great obj-c libraries.
+The library was a port of [SDAVAssetExportSession](https://github.com/rs/SDAVAssetExportSession) with inspiration taken from [SCAssetExportSession](https://github.com/rFlex/SCRecorder/blob/master/Library/Sources/SCAssetExportSession.h) – which are great obj-c alternatives.
 
 `NextLevelSessionExporter` provides customizable audio and video encoding options unlike `AVAssetExportSession` and without having to learn the intricacies of AVFoundation.
 
@@ -35,6 +34,31 @@ Alternatively, drop the [source files](https://github.com/NextLevel/NextLevelSes
 ## Example
 
 ``` Swift
+let encoder = NextLevelSessionExporter(withAsset: asset)
+encoder.delegate = self
+encoder.outputFileType = AVFileTypeMPEG4
+encoder.outputURL = URL(fileURLWithPath: NSHomeDirectory())
+ 
+ // add desired configuration
+ //encoder.videoOutputConfiguration
+ //encoder.audioOutputConfiguration
+
+do {
+    try encoder.export(withCompletionHandler: { () in                
+        switch encoder.status {
+            case .completed:
+                print("video export completed")
+                break
+            case .cancelled:
+                print("video export cancelled")
+                break
+            default:
+                break
+            }
+       })
+   } catch {
+        print("Failed to export")
+    }
 ```
 
 ## Community
