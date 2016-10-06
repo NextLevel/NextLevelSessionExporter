@@ -9,6 +9,9 @@ The library was a port of [SDAVAssetExportSession](https://github.com/rs/SDAVAss
 
 `NextLevelSessionExporter` provides customizable audio and video encoding options unlike `AVAssetExportSession` and without having to learn the intricacies of AVFoundation.
 
+- Looking for a Swift capture library? Check out [Next Level](https://github.com/NextLevel/NextLevel).
+- Looking for a video player? Check out [Player (Swift)](https://github.com/piemonte/player) and [PBJVideoPlayer (obj-c)](https://github.com/piemonte/PBJVideoPlayer).
+
 ## Quick Start
 
 ```ruby
