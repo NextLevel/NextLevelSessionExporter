@@ -46,19 +46,19 @@ encoder.outputURL = URL(fileURLWithPath: NSHomeDirectory())
 do {
     try encoder.export(withCompletionHandler: { () in                
         switch encoder.status {
-            case .completed:
-                print("video export completed")
-                break
-            case .cancelled:
-                print("video export cancelled")
-                break
-            default:
-                break
-            }
-       })
-   } catch {
-        print("Failed to export")
-    }
+        case .completed:
+            print("video export completed")
+            break
+        case .cancelled:
+            print("video export cancelled")
+            break
+        default:
+            break
+        }
+    })
+} catch {
+    print("Failed to export")
+}
 ```
 
 ## Community
