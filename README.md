@@ -3,6 +3,8 @@
 
 `NextLevelSessionExporter` is an export and transcode media library for iOS written in [Swift](https://developer.apple.com/swift/).
 
+[![Build Status](https://travis-ci.org/NextLevel/NextLevelSessionExporter.svg?branch=master)](https://travis-ci.org/NextLevel/NextLevelSessionExporter) [![Pod Version](https://img.shields.io/cocoapods/v/NextLevelSessionExporter.svg?style=flat)](http://cocoadocs.org/docsets/NextLevelSessionExporter/)
+
 The library was a port of [SDAVAssetExportSession](https://github.com/rs/SDAVAssetExportSession) with inspiration taken from [SCAssetExportSession](https://github.com/rFlex/SCRecorder/blob/master/Library/Sources/SCAssetExportSession.h) – which are great obj-c alternatives.
 
 `NextLevelSessionExporter` provides customizable audio and video encoding options unlike `AVAssetExportSession` and without having to learn the intricacies of AVFoundation.
