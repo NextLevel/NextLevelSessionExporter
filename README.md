@@ -5,12 +5,10 @@
 
 [![Build Status](https://travis-ci.org/NextLevel/NextLevelSessionExporter.svg?branch=master)](https://travis-ci.org/NextLevel/NextLevelSessionExporter) [![Pod Version](https://img.shields.io/cocoapods/v/NextLevelSessionExporter.svg?style=flat)](http://cocoadocs.org/docsets/NextLevelSessionExporter/)
 
-The library was a port of [SDAVAssetExportSession](https://github.com/rs/SDAVAssetExportSession) with inspiration taken from [SCAssetExportSession](https://github.com/rFlex/SCRecorder/blob/master/Library/Sources/SCAssetExportSession.h) – which are great obj-c alternatives.
+The library provides customizable audio and video encoding options unlike `AVAssetExportSession` and without having to learn the intricacies of AVFoundation. It was a port of [SDAVAssetExportSession](https://github.com/rs/SDAVAssetExportSession) with inspiration from [SCAssetExportSession](https://github.com/rFlex/SCRecorder/blob/master/Library/Sources/SCAssetExportSession.h) – which are great obj-c alternatives.
 
-`NextLevelSessionExporter` provides customizable audio and video encoding options unlike `AVAssetExportSession` and without having to learn the intricacies of AVFoundation.
-
-- Looking for a Swift capture library? Check out [Next Level](https://github.com/NextLevel/NextLevel).
-- Looking for a video player? Check out [Player (Swift)](https://github.com/piemonte/player) and [PBJVideoPlayer (obj-c)](https://github.com/piemonte/PBJVideoPlayer).
+- Looking for a capture library? Check out [Next Level](https://github.com/NextLevel/NextLevel).
+- Looking for a video player? Check out [Player](https://github.com/piemonte/player)
 
 ## Quick Start
 
@@ -42,11 +40,10 @@ Alternatively, drop the [source files](https://github.com/NextLevel/NextLevelSes
 let encoder = NextLevelSessionExporter(withAsset: asset)
 encoder.delegate = self
 encoder.outputFileType = AVFileTypeMPEG4
-encoder.outputURL = URL(fileURLWithPath: NSHomeDirectory())
- 
- // add desired configuration
- //encoder.videoOutputConfiguration
- //encoder.audioOutputConfiguration
+encoder.outputURL = URL(fileURLWithPath: NSHomeDirectory() + "video.mp4")
+// add target configuration
+//encoder.videoOutputConfiguration
+//encoder.audioOutputConfiguration
 
 do {
     try encoder.export(withCompletionHandler: { () in                
@@ -62,7 +59,7 @@ do {
         }
     })
 } catch {
-    print("Failed to export")
+    print("failed to export")
 }
 ```
 
