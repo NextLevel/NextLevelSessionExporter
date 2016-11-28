@@ -26,8 +26,10 @@ import AVFoundation
 
 // MARK: - types
 
+/// Session export error domain.
 public let NextLevelSessionExporterErrorDomain = "NextLevelSessionExporterErrorDomain"
 
+/// Session export errors.
 public enum NextLevelSessionExporterError: Error, CustomStringConvertible {
     case unknown
     case setupFailure
@@ -46,6 +48,7 @@ public enum NextLevelSessionExporterError: Error, CustomStringConvertible {
 
 // MARK: - NextLevelSessionExporterDelegate
 
+/// A session exporter's delegate protocol.
 public protocol NextLevelSessionExporterDelegate: NSObjectProtocol {
     func sessionExporter(_ sessionExporter: NextLevelSessionExporter, didUpdateProgress progress: Float)
     func sessionExporter(_ sessionExporter: NextLevelSessionExporter, didRenderFrame renderFrame: CVPixelBuffer, withPresentationTime presentationTime: CMTime, toRenderBuffer renderBuffer: CVPixelBuffer)
@@ -55,35 +58,51 @@ public protocol NextLevelSessionExporterDelegate: NSObjectProtocol {
 
 private let NextLevelSessionExporterInputQueue = "NextLevelSessionExporterInputQueue"
 
+/// 🔄 NextLevelSessionExporter, export and transcode media in Swift
 public class NextLevelSessionExporter: NSObject {
     
+    /// A session exporter's delegate.
     public weak var delegate: NextLevelSessionExporterDelegate?
     
     // config
     
+    /// Input asset for export, provided when initialized.
     public var asset: AVAsset?
+    
+    /// Enables video composition and parameters for the session.
     public var videoComposition: AVVideoComposition?
+    
+    /// Enables audio mixing and parameters for the session.
     public var audioMix: AVAudioMix?
     
+    /// Output file location for the session.
     public var outputURL: URL?
+    
+    /// Output file type. UTI string defined in `AVMediaFormat.h`.
     public var outputFileType: String?
     
+    /// Time range or limit of an export from `kCMTimeZero` to `kCMTimePositiveInfinity`
     public var timeRange: CMTimeRange
+    
+    /// Indicates if an export session should expect media data in real time.
     public var expectsMediaDataInRealTime: Bool
+    
+    /// Indicates if an export should be optimized for network use.
     public var optimizeForNetworkUse: Bool
     
+    /// Metadata to be added to an export.
     public var metadata: [AVMetadataItem]?
 
+    /// Video input configuration dictionary, using keys defined in ``
     public var videoInputConfiguration: [String : Any]?
-    
-    // AVVideoSettings.h
+
+    /// Video output configuration dictionary, using keys defined in `AVVideoSettings.h`
     public var videoOutputConfiguration: [String : Any]?
     
-    // CVPixelBuffer.h
+    /// Audio output configuration dictionary, using keys defined in `CVPixelBuffer.h`
     public var audioOutputConfiguration: [String : Any]?
 
-    // state
-    
+    /// Export session status state.
     public var status: AVAssetExportSessionStatus {
         get {
             if let writer = self._writer {
@@ -104,6 +123,7 @@ public class NextLevelSessionExporter: NSObject {
         }
     }
     
+    /// Session exporting progress from 0 to 1.
     public var progress: Float {
         get {
             return self._progress
@@ -131,6 +151,9 @@ public class NextLevelSessionExporter: NSObject {
     
     // MARK: - object lifecycle
     
+    /// Initializes a session with an asset to export.
+    ///
+    /// - Parameter asset: The asset to export.
     public convenience init(withAsset asset: AVAsset) {
         self.init()
         self.asset = asset
@@ -156,11 +179,18 @@ public class NextLevelSessionExporter: NSObject {
         self._videoInput = nil
         self._audioInput = nil
     }
-    
-    // MARK: - functions
-    
+}
+
+// MARK: - export
+
+extension NextLevelSessionExporter {
+
     public typealias NextLevelSessionExporterCompletionHandler = (Void) -> Void
     
+    /// Initiates an export session.
+    ///
+    /// - Parameter completionHandler: Handler called when an export session completes.
+    /// - Throws: Failure indication thrown when an error has occurred during export.
     public func export(withCompletionHandler completionHandler: @escaping NextLevelSessionExporterCompletionHandler) throws {
         self.cancelExport()
         self._completionHandler = completionHandler
