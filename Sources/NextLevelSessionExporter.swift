@@ -323,6 +323,26 @@ public class NextLevelSessionExporter: NSObject {
         }
     }
     
+    /// Cancels any export in progress.
+    public func cancelExport() {
+        if let inputQueue = self._inputQueue {
+            inputQueue.async {
+                if self._writer?.status == .writing {
+                    self._writer?.cancelWriting()
+                }
+                
+                if self._reader?.status == .reading {
+                    self._reader?.cancelReading()
+                }
+                
+                self.complete()
+                self.reset()
+            }
+        }
+    }
+    
+    // MARK: - private func
+
     private func encode(readySamplesFromReaderOutput output: AVAssetReaderOutput, toWriterInput input: AVAssetWriterInput) -> Bool {
         while input.isReadyForMoreMediaData {
             if let sampleBuffer = output.copyNextSampleBuffer() {
@@ -446,23 +466,6 @@ public class NextLevelSessionExporter: NSObject {
         }
         
         return videoComposition
-    }
-    
-    public func cancelExport() {
-        if let inputQueue = self._inputQueue {
-            inputQueue.async {
-                if self._writer?.status == .writing {
-                    self._writer?.cancelWriting()
-                }
-                
-                if self._reader?.status == .reading {
-                    self._reader?.cancelReading()
-                }
-                
-                self.complete()
-                self.reset()
-            }
-        }
     }
     
     private func updateProgress(progress: Float) {
