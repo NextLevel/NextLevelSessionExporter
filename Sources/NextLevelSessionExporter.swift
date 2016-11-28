@@ -263,11 +263,16 @@ extension NextLevelSessionExporter {
                     }
                 }
                 
-                let pixelBufferAttrib: [String : Any] = [ String(kCVPixelBufferPixelFormatTypeKey) : kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
-                                          String(kCVPixelBufferWidthKey) : self._videoOutput?.videoComposition?.renderSize.width,
-                                          String(kCVPixelBufferHeightKey) : self._videoOutput?.videoComposition?.renderSize.height,
-                                          "IOSurfaceOpenGLESTextureCompatibility" : true,
-                                          "IOSurfaceOpenGLESFBOCompatibility" : true]
+                var pixelBufferAttrib: [String : Any] = [:]
+                pixelBufferAttrib[String(kCVPixelBufferPixelFormatTypeKey)] = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+                if let videoOutput = self._videoOutput,
+                    let videoComposition = videoOutput.videoComposition {
+                    pixelBufferAttrib[String(kCVPixelBufferWidthKey)] = videoComposition.renderSize.width
+                    pixelBufferAttrib[String(kCVPixelBufferHeightKey)] = videoComposition.renderSize.height
+                }
+                pixelBufferAttrib["IOSurfaceOpenGLESTextureCompatibility"] = true
+                pixelBufferAttrib["IOSurfaceOpenGLESFBOCompatibility"] = true
+                
                 if let videoInput = self._videoInput {
                     self._pixelBufferAdaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: videoInput, sourcePixelBufferAttributes: pixelBufferAttrib)
                 }
