@@ -25,6 +25,7 @@
 
 import UIKit
 import AVFoundation
+import Photos
 
 class ViewController: UIViewController {
 
@@ -65,6 +66,7 @@ class ViewController: UIViewController {
                 switch encoder.status {
                 case .completed:
                     print("NextLevelSessionExporter, export completed, \(encoder.outputURL)")
+                    self.saveVideo(withURL: encoder.outputURL!)
                     break
                 case .cancelled:
                     print("NextLevelSessionExporter, export cancelled")
@@ -85,6 +87,51 @@ class ViewController: UIViewController {
             print("NextLevelSessionExporter, failed to export")
         }
     }
+    
+    private func saveVideo(withURL url: URL) {
+        PHPhotoLibrary.shared().performChanges({
+            let albumAssetCollection = self.albumAssetCollection(withTitle: "Next Level")
+            if albumAssetCollection == nil {
+                let changeRequest = PHAssetCollectionChangeRequest.creationRequestForAssetCollection(withTitle: "Next Level")
+                let _ = changeRequest.placeholderForCreatedAssetCollection
+            }}, completionHandler: { (success1: Bool, error1: Error?) in
+                if let albumAssetCollection = self.albumAssetCollection(withTitle: "Next Level") {
+                    PHPhotoLibrary.shared().performChanges({
+                        if let assetChangeRequest = PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url) {
+                            let assetCollectionChangeRequest = PHAssetCollectionChangeRequest(for: albumAssetCollection)
+                            let enumeration: NSArray = [assetChangeRequest.placeholderForCreatedAsset!]
+                            assetCollectionChangeRequest?.addAssets(enumeration)
+                        }
+                    }, completionHandler: { (success2: Bool, error2: Error?) in
+                        if success2 == true {
+                            // prompt that the video has been saved
+                            let alertController = UIAlertController(title: "Video Saved!", message: "Saved to the camera roll.", preferredStyle: .alert)
+                            let okAction = UIAlertAction(title: "OK", style: .default, handler: nil)
+                            alertController.addAction(okAction)
+                            self.present(alertController, animated: true, completion: nil)
+                        } else {
+                            // prompt that the video has been saved
+                            let alertController = UIAlertController(title: "Something failed!", message: "Something failed!", preferredStyle: .alert)
+                            let okAction = UIAlertAction(title: "OK", style: .default, handler: nil)
+                            alertController.addAction(okAction)
+                            self.present(alertController, animated: true, completion: nil)
+                        }
+                    })
+                }
+        })
+    }
+
+    private func albumAssetCollection(withTitle title: String) -> PHAssetCollection? {
+        let predicate = NSPredicate(format: "localizedTitle = %@", title)
+        let options = PHFetchOptions()
+        options.predicate = predicate
+        let result = PHAssetCollection.fetchAssetCollections(with: .album, subtype: .any, options: options)
+        if result.count > 0 {
+            return result.firstObject
+        }
+        return nil
+    }
+    
 }
 
 // MARK: - NextLevelSessionExporterDelegate
