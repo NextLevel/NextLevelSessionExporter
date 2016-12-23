@@ -408,7 +408,8 @@ extension NextLevelSessionExporter {
                 if handled == false && self._videoOutput == output {
                     self._lastSamplePresentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
                     self._lastSamplePresentationTime = self._lastSamplePresentationTime - self.timeRange.start
-                    self._progress = self._duration == 0 ? 1 : Float(CMTimeGetSeconds(self._lastSamplePresentationTime) / self._duration)
+                    let progress = self._duration == 0 ? 1 : Float(CMTimeGetSeconds(self._lastSamplePresentationTime) / self._duration)
+                    self.updateProgress(progress: progress)
                     
                     if let pixelBufferAdaptor = self._pixelBufferAdaptor,
                         let pixelBufferPool = pixelBufferAdaptor.pixelBufferPool,
