@@ -398,7 +398,6 @@ extension NextLevelSessionExporter {
     private func encode(readySamplesFromReaderOutput output: AVAssetReaderOutput, toWriterInput input: AVAssetWriterInput) -> Bool {
         while input.isReadyForMoreMediaData {
             if let sampleBuffer = output.copyNextSampleBuffer() {
-                
                 var handled = false
                 var error = false
                 
@@ -408,11 +407,13 @@ extension NextLevelSessionExporter {
                 }
                 
                 if handled == false && self._videoOutput == output {
+                    // determine progress
                     self._lastSamplePresentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
                     self._lastSamplePresentationTime = self._lastSamplePresentationTime - self.timeRange.start
                     let progress = self._duration == 0 ? 1 : Float(CMTimeGetSeconds(self._lastSamplePresentationTime) / self._duration)
                     self.updateProgress(progress: progress)
                     
+                    // prepare progress frames
                     if let pixelBufferAdaptor = self._pixelBufferAdaptor,
                         let pixelBufferPool = pixelBufferAdaptor.pixelBufferPool,
                         let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
@@ -427,7 +428,7 @@ extension NextLevelSessionExporter {
                         }
                     }
                 }
-                
+
                 if handled == false && input.append(sampleBuffer) == false {
                     error = true
                 }
@@ -445,6 +446,7 @@ extension NextLevelSessionExporter {
     }
     
     private func makeVideoComposition() -> AVMutableVideoComposition {
+        
         let videoComposition = AVMutableVideoComposition()
         
         if let asset = self.asset,
