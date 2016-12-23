@@ -31,14 +31,11 @@ public let NextLevelSessionExporterErrorDomain = "NextLevelSessionExporterErrorD
 
 /// Session export errors.
 public enum NextLevelSessionExporterError: Error, CustomStringConvertible {
-    case unknown
     case setupFailure
     
     public var description: String {
         get {
             switch self {
-            case .unknown:
-                return "Unknown"
             case .setupFailure:
                 return "Setup failure"
             }
