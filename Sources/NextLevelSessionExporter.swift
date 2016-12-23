@@ -331,45 +331,47 @@ extension NextLevelSessionExporter {
         self._reader?.startReading()
         self._writer?.startSession(atSourceTime: self.timeRange.start)
         
-        let audioSem = DispatchSemaphore(value: 0)
-        let videoSem = DispatchSemaphore(value: 0)
+        let audioSemaphore = DispatchSemaphore(value: 0)
+        let videoSemaphore = DispatchSemaphore(value: 0)
         
         self._inputQueue = DispatchQueue(label: NextLevelSessionExporterInputQueue, autoreleaseFrequency: .workItem, target: DispatchQueue.global())
         if let inputQueue = self._inputQueue {
+            
             if let videoTracks = self.asset?.tracks(withMediaType: AVMediaTypeVideo),
                 let videoInput = self._videoInput,
                 let videoOutput = self._videoOutput {
                 if videoTracks.count > 0 {
                     videoInput.requestMediaDataWhenReady(on: inputQueue, using: {
                         if self.encode(readySamplesFromReaderOutput: videoOutput, toWriterInput: videoInput) == false {
-                            videoSem.signal()
+                            videoSemaphore.signal()
                         }
                     })
                 } else {
-                    videoSem.signal()
+                    videoSemaphore.signal()
                 }
             } else {
-                videoSem.signal()
+                videoSemaphore.signal()
             }
             
             if let audioInput = self._audioInput,
                 let audioOutput = self._audioOutput {
                 audioInput.requestMediaDataWhenReady(on: inputQueue, using: {
                     if self.encode(readySamplesFromReaderOutput: audioOutput, toWriterInput: audioInput) == false {
-                        audioSem.signal()
+                        audioSemaphore.signal()
                     }
                 })
             } else {
-                audioSem.signal()
+                audioSemaphore.signal()
             }
 
             DispatchQueue.global().async {
-                audioSem.wait()
-                videoSem.wait()
-                DispatchQueue.main.async {
+                audioSemaphore.wait()
+                videoSemaphore.wait()
+                DispatchQueue.main.sync {
                     self.finish()
                 }
             }
+            
         }
     }
     
