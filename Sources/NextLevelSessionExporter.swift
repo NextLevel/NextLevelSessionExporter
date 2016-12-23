@@ -236,12 +236,10 @@ extension NextLevelSessionExporter {
             self._writer?.metadata = metadata
         }
         
-        if self.timeRange.duration.isValid && CMTIME_IS_POSITIVEINFINITY(self.timeRange.duration) == false {
+        if self.timeRange.duration.isValid && self.timeRange.duration.isPositiveInfinity == false {
             self._duration = CMTimeGetSeconds(self.timeRange.duration)
         } else {
-            if let asset = self.asset {
-                self._duration = CMTimeGetSeconds(asset.duration)
-            }
+            self._duration = CMTimeGetSeconds(self.asset!.duration)
         }
         
         if self.videoOutputConfiguration?.keys.contains(AVVideoCodecKey) == false {
@@ -408,7 +406,7 @@ extension NextLevelSessionExporter {
                 if handled == false && self._videoOutput == output {
                     // determine progress
                     self._lastSamplePresentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-                    self._lastSamplePresentationTime = CMTimeSubtract(self._lastSamplePresentationTime, self.timeRange.start)
+                    self._lastSamplePresentationTime = self._lastSamplePresentationTime - self.timeRange.start
                     let progress = self._duration == 0 ? 1 : Float(CMTimeGetSeconds(self._lastSamplePresentationTime) / self._duration)
                     self.updateProgress(progress: progress)
                     
@@ -426,7 +424,6 @@ extension NextLevelSessionExporter {
                             }
                             handled = true
                         }
-                        
                     }
                 }
 
