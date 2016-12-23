@@ -550,10 +550,12 @@ extension NextLevelSessionExporter {
         if let writer = self._writer {
             if writer.status == .failed || writer.status == .cancelled {
                 if let outputURL = self.outputURL {
-                    do {
-                        try FileManager.default.removeItem(at: outputURL)
-                    } catch  {
-                        print("NextLevelSessionExporter, failed to delete file at \(outputURL)")
+                    if FileManager.default.fileExists(atPath: outputURL.absoluteString) == true {
+                        do {
+                            try FileManager.default.removeItem(at: outputURL)
+                        } catch  {
+                            debugPrint("NextLevelSessionExporter, failed to delete file at \(outputURL)")
+                        }
                     }
                 }
             }
