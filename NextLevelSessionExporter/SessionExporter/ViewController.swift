@@ -45,7 +45,7 @@ class ViewController: UIViewController {
         
         var compressionDict: [String : Any] = [:]
         compressionDict[AVVideoAverageBitRateKey] = NSNumber(value: Int(40000))
-        compressionDict[AVVideoAllowFrameReorderingKey] = NSNumber(value: false)
+        compressionDict[AVVideoAllowFrameReorderingKey] = false
         compressionDict[AVVideoExpectedSourceFrameRateKey] = NSNumber(value: Int(30))
         
         encoder.videoOutputConfiguration = [

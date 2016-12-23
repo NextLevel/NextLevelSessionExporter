@@ -244,6 +244,11 @@ extension NextLevelSessionExporter {
             }
         }
         
+        if self.videoOutputConfiguration?.keys.contains(AVVideoCodecKey) == false {
+            print("NextLevelSessionExporter, warning a video output configuration codec wasn't specified")
+            self.videoOutputConfiguration?[AVVideoCodecKey] = AVVideoCodecH264
+        }
+        
         // video output
         
         if let videoTracks = self.asset?.tracks(withMediaType: AVMediaTypeVideo) {
