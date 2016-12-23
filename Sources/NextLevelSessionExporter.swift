@@ -375,19 +375,17 @@ extension NextLevelSessionExporter {
     
     /// Cancels any export in progress.
     public func cancelExport() {
-        if let inputQueue = self._inputQueue {
-            inputQueue.async {
-                if self._writer?.status == .writing {
-                    self._writer?.cancelWriting()
-                }
-                
-                if self._reader?.status == .reading {
-                    self._reader?.cancelReading()
-                }
-                
-                self.complete()
-                self.reset()
+        self._inputQueue?.async {
+            if self._writer?.status == .writing {
+                self._writer?.cancelWriting()
             }
+            
+            if self._reader?.status == .reading {
+                self._reader?.cancelReading()
+            }
+            
+            self.complete()
+            self.reset()
         }
     }
     
