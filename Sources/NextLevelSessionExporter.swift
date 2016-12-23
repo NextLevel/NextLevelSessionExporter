@@ -281,14 +281,13 @@ extension NextLevelSessionExporter {
                 }
                 
                 var pixelBufferAttrib: [String : Any] = [:]
-                pixelBufferAttrib[String(kCVPixelBufferPixelFormatTypeKey)] = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
-                if let videoOutput = self._videoOutput,
-                    let videoComposition = videoOutput.videoComposition {
-                    pixelBufferAttrib[String(kCVPixelBufferWidthKey)] = NSNumber(value: Int(videoComposition.renderSize.width))
-                    pixelBufferAttrib[String(kCVPixelBufferHeightKey)] = NSNumber(value: Int(videoComposition.renderSize.height))
+                pixelBufferAttrib[kCVPixelBufferPixelFormatTypeKey as String] = NSNumber(value: Int(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange))
+                if let videoComposition = self._videoOutput?.videoComposition {
+                    pixelBufferAttrib[kCVPixelBufferWidthKey as String] = NSNumber(value: Int(videoComposition.renderSize.width))
+                    pixelBufferAttrib[kCVPixelBufferHeightKey as String] = NSNumber(value: Int(videoComposition.renderSize.height))
                 }
-                pixelBufferAttrib["IOSurfaceOpenGLESTextureCompatibility"] = true
-                pixelBufferAttrib["IOSurfaceOpenGLESFBOCompatibility"] = true
+                pixelBufferAttrib["IOSurfaceOpenGLESTextureCompatibility"] = NSNumber(booleanLiteral:  true)
+                pixelBufferAttrib["IOSurfaceOpenGLESFBOCompatibility"] = NSNumber(booleanLiteral:  true)
                 
                 if let videoInput = self._videoInput {
                     self._pixelBufferAdaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: videoInput, sourcePixelBufferAttributes: pixelBufferAttrib)
