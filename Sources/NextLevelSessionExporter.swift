@@ -334,7 +334,7 @@ extension NextLevelSessionExporter {
         let audioSem = DispatchSemaphore(value: 0)
         let videoSem = DispatchSemaphore(value: 0)
         
-        self._inputQueue = DispatchQueue(label: NextLevelSessionExporterInputQueue)
+        self._inputQueue = DispatchQueue(label: NextLevelSessionExporterInputQueue, autoreleaseFrequency: .workItem, target: DispatchQueue.global())
         if let inputQueue = self._inputQueue {
             if let videoTracks = self.asset?.tracks(withMediaType: AVMediaTypeVideo),
                 let videoInput = self._videoInput,
