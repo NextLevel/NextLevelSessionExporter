@@ -417,6 +417,7 @@ extension NextLevelSessionExporter {
                     if let pixelBufferAdaptor = self._pixelBufferAdaptor,
                         let pixelBufferPool = pixelBufferAdaptor.pixelBufferPool,
                         let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
+                        
                         var renderBuffer: CVPixelBuffer? = nil
                         CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pixelBufferPool, &renderBuffer)
                         if let buffer = renderBuffer {
@@ -426,6 +427,7 @@ extension NextLevelSessionExporter {
                             }
                             handled = true
                         }
+                        
                     }
                 }
 
