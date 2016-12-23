@@ -259,7 +259,7 @@ extension NextLevelSessionExporter {
                 if let videoComposition = self.videoComposition {
                     self._videoOutput?.videoComposition = videoComposition
                 } else {
-                    self._videoOutput?.videoComposition = self.makeVideoComposition()
+                    self._videoOutput?.videoComposition = self.createVideoComposition()
                 }
                 
                 if let videoOutput = self._videoOutput,
@@ -445,7 +445,7 @@ extension NextLevelSessionExporter {
         return true
     }
     
-    private func makeVideoComposition() -> AVMutableVideoComposition {
+    private func createVideoComposition() -> AVMutableVideoComposition {
         
         let videoComposition = AVMutableVideoComposition()
         
