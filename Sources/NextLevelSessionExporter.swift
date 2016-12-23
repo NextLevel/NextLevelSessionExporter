@@ -534,8 +534,10 @@ extension NextLevelSessionExporter {
             }
         
             if writer.status == .failed {
+                debugPrint("NextLevelSessionExporter, writing failed, \(writer.error)")
                 self.complete()
             } else if reader.status == .failed {
+                debugPrint("NextLevelSessionExporter, reading failed, \(reader.error)")
                 writer.cancelWriting()
                 self.complete()
             } else {
