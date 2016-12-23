@@ -476,9 +476,9 @@ extension NextLevelSessionExporter {
                     
                     let videoAngleInDegrees = atan2(transform.b, transform.a) * 180 / CGFloat(M_PI)
                     if videoAngleInDegrees == 90 || videoAngleInDegrees == -90 {
-                        let width = naturalSize.width
+                        let tempWidth = naturalSize.width
                         naturalSize.width = naturalSize.height
-                        naturalSize.height = width
+                        naturalSize.height = tempWidth
                     }
                     videoComposition.renderSize = naturalSize
                     
@@ -504,7 +504,6 @@ extension NextLevelSessionExporter {
                     compositionInstruction.timeRange = CMTimeRange(start: kCMTimeZero, duration: asset.duration)
                     
                     let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: videoTrack)
-                    
                     layerInstruction.setTransform(transform, at: kCMTimeZero)
                     
                     compositionInstruction.layerInstructions = [layerInstruction]
