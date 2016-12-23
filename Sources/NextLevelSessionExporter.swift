@@ -279,8 +279,8 @@ extension NextLevelSessionExporter {
                 pixelBufferAttrib[String(kCVPixelBufferPixelFormatTypeKey)] = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
                 if let videoOutput = self._videoOutput,
                     let videoComposition = videoOutput.videoComposition {
-                    pixelBufferAttrib[String(kCVPixelBufferWidthKey)] = videoComposition.renderSize.width
-                    pixelBufferAttrib[String(kCVPixelBufferHeightKey)] = videoComposition.renderSize.height
+                    pixelBufferAttrib[String(kCVPixelBufferWidthKey)] = NSNumber(value: Int(videoComposition.renderSize.width))
+                    pixelBufferAttrib[String(kCVPixelBufferHeightKey)] = NSNumber(value: Int(videoComposition.renderSize.height))
                 }
                 pixelBufferAttrib["IOSurfaceOpenGLESTextureCompatibility"] = true
                 pixelBufferAttrib["IOSurfaceOpenGLESFBOCompatibility"] = true
