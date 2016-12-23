@@ -454,21 +454,21 @@ extension NextLevelSessionExporter {
             
             // determine the framerate
             
-            var frameRate: Int32 = 0
+            var frameRate: Int = 0
             if let videoConfiguration = self.videoOutputConfiguration {
                 if let videoCompressionConfiguration = videoConfiguration[AVVideoCompressionPropertiesKey] as? [String: Any] {
-                    if let maxKeyFrameInterval = videoCompressionConfiguration[AVVideoMaxKeyFrameIntervalKey] as? Int32 {
-                        frameRate = maxKeyFrameInterval
+                    if let maxKeyFrameInterval = videoCompressionConfiguration[AVVideoMaxKeyFrameIntervalKey] as? NSNumber {
+                        frameRate = maxKeyFrameInterval.intValue
                     }
                 }
             } else {
-                frameRate = Int32(videoTrack.nominalFrameRate)
+                frameRate = Int(videoTrack.nominalFrameRate)
             }
             
             if frameRate == 0 {
                 frameRate = 30
             }
-            videoComposition.frameDuration = CMTimeMake(1, frameRate)
+            videoComposition.frameDuration = CMTimeMake(1, Int32(frameRate))
             
             // determine the appropriate size and transform
             
@@ -530,37 +530,32 @@ extension NextLevelSessionExporter {
     }
     
     private func finish() {
-        if let reader = self._reader, let writer = self._writer {
-            if reader.status == .cancelled ||
-                writer.status == .cancelled {
-                return
-            }
-        
-            if writer.status == .failed {
-                debugPrint("NextLevelSessionExporter, writing failed, \(writer.error)")
+        if self._reader?.status == .cancelled || self._writer?.status == .cancelled {
+            return
+        }
+    
+        if self._writer?.status == .failed {
+            debugPrint("NextLevelSessionExporter, writing failed, \(self._writer?.error)")
+            self.complete()
+        } else if self._reader?.status == .failed {
+            debugPrint("NextLevelSessionExporter, reading failed, \(self._reader?.error)")
+            self._writer?.cancelWriting()
+            self.complete()
+        } else {
+            self._writer?.finishWriting {
                 self.complete()
-            } else if reader.status == .failed {
-                debugPrint("NextLevelSessionExporter, reading failed, \(reader.error)")
-                writer.cancelWriting()
-                self.complete()
-            } else {
-                writer.finishWriting {
-                    self.complete()
-                }
             }
         }
     }
     
     private func complete() {
-        if let writer = self._writer {
-            if writer.status == .failed || writer.status == .cancelled {
-                if let outputURL = self.outputURL {
-                    if FileManager.default.fileExists(atPath: outputURL.absoluteString) == true {
-                        do {
-                            try FileManager.default.removeItem(at: outputURL)
-                        } catch  {
-                            debugPrint("NextLevelSessionExporter, failed to delete file at \(outputURL)")
-                        }
+        if self._writer?.status == .failed || self._writer?.status == .cancelled {
+            if let outputURL = self.outputURL {
+                if FileManager.default.fileExists(atPath: outputURL.absoluteString) == true {
+                    do {
+                        try FileManager.default.removeItem(at: outputURL)
+                    } catch  {
+                        debugPrint("NextLevelSessionExporter, failed to delete file at \(outputURL)")
                     }
                 }
             }
