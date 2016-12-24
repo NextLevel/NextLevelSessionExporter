@@ -45,7 +45,7 @@ class ViewController: UIViewController {
         
         var compressionDict: [String : Any] = [:]
         compressionDict[AVVideoAverageBitRateKey] = NSNumber(value: Int(40000))
-        compressionDict[AVVideoAllowFrameReorderingKey] = false
+        compressionDict[AVVideoAllowFrameReorderingKey] = NSNumber(booleanLiteral: false)
         compressionDict[AVVideoExpectedSourceFrameRateKey] = NSNumber(value: Int(30))
         
         encoder.videoOutputConfiguration = [
@@ -56,8 +56,9 @@ class ViewController: UIViewController {
             AVVideoCompressionPropertiesKey: compressionDict
         ]
         encoder.audioOutputConfiguration = [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
             AVEncoderBitRateKey: NSNumber(value: Int(40000)),
-            AVNumberOfChannelsKey: NSNumber(value: Int(1)),
+            AVNumberOfChannelsKey: NSNumber(value: Int(2)),
             AVSampleRateKey: NSNumber(value: Int(16000))
         ]
         
