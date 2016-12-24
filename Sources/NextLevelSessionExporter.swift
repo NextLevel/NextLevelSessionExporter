@@ -90,13 +90,13 @@ public class NextLevelSessionExporter: NSObject {
     /// Metadata to be added to an export.
     public var metadata: [AVMetadataItem]?
 
-    /// Video input configuration dictionary, using keys defined in ``
+    /// Video input configuration dictionary, using keys defined in `<CoreVideo/CVPixelBuffer.h>`
     public var videoInputConfiguration: [String : Any]?
 
-    /// Video output configuration dictionary, using keys defined in `AVVideoSettings.h`
+    /// Video output configuration dictionary, using keys defined in `<AVFoundation/AVVideoSettings.h>`
     public var videoOutputConfiguration: [String : Any]?
     
-    /// Audio output configuration dictionary, using keys defined in `CVPixelBuffer.h`
+    /// Audio output configuration dictionary, using keys defined in `<CoreVideo/CVPixelBuffer.h>`
     public var audioOutputConfiguration: [String : Any]?
 
     /// Export session status state.
