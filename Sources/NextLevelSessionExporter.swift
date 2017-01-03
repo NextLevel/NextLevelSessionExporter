@@ -276,18 +276,18 @@ extension NextLevelSessionExporter {
                     if writer.canAdd(videoInput) {
                         writer.add(videoInput)
                     }
-                }
-                
-                var pixelBufferAttrib: [String : Any] = [:]
-                pixelBufferAttrib[kCVPixelBufferPixelFormatTypeKey as String] = NSNumber(value: Int(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange))
-                if let videoComposition = self._videoOutput?.videoComposition {
-                    pixelBufferAttrib[kCVPixelBufferWidthKey as String] = NSNumber(value: Int(videoComposition.renderSize.width))
-                    pixelBufferAttrib[kCVPixelBufferHeightKey as String] = NSNumber(value: Int(videoComposition.renderSize.height))
-                }
-                pixelBufferAttrib["IOSurfaceOpenGLESTextureCompatibility"] = NSNumber(booleanLiteral:  true)
-                pixelBufferAttrib["IOSurfaceOpenGLESFBOCompatibility"] = NSNumber(booleanLiteral:  true)
-                
-                if let videoInput = self._videoInput {
+                    
+                    // setup pixelbuffer adaptor
+                    
+                    var pixelBufferAttrib: [String : Any] = [:]
+                    pixelBufferAttrib[kCVPixelBufferPixelFormatTypeKey as String] = NSNumber(value: Int(kCVPixelFormatType_420YpCbCr8BiPlanarFullRange))
+                    if let videoComposition = self._videoOutput?.videoComposition {
+                        pixelBufferAttrib[kCVPixelBufferWidthKey as String] = NSNumber(value: Int(videoComposition.renderSize.width))
+                        pixelBufferAttrib[kCVPixelBufferHeightKey as String] = NSNumber(value: Int(videoComposition.renderSize.height))
+                    }
+                    pixelBufferAttrib["IOSurfaceOpenGLESTextureCompatibility"] = NSNumber(booleanLiteral:  true)
+                    pixelBufferAttrib["IOSurfaceOpenGLESFBOCompatibility"] = NSNumber(booleanLiteral:  true)
+                    
                     self._pixelBufferAdaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: videoInput, sourcePixelBufferAttributes: pixelBufferAttrib)
                 }
             }
@@ -392,6 +392,7 @@ extension NextLevelSessionExporter {
     
     // MARK: - private func
 
+    // called on the inputQueue
     private func encode(readySamplesFromReaderOutput output: AVAssetReaderOutput, toWriterInput input: AVAssetWriterInput) -> Bool {
         while input.isReadyForMoreMediaData {
             if let sampleBuffer = output.copyNextSampleBuffer() {
@@ -471,49 +472,50 @@ extension NextLevelSessionExporter {
             // determine the appropriate size and transform
             
             if let videoConfiguration = self.videoOutputConfiguration {
-                if let width = videoConfiguration[AVVideoWidthKey] as? CGFloat,
-                    let height = videoConfiguration[AVVideoHeightKey] as? CGFloat {
-                    
-                    let transform = videoTrack.preferredTransform
-                    
-                    let targetSize = CGSize(width: width, height: height)
-                    var naturalSize = videoTrack.naturalSize
-                    
-                    let videoAngleInDegrees = atan2(transform.b, transform.a) * 180 / CGFloat(M_PI)
-                    if videoAngleInDegrees == 90 || videoAngleInDegrees == -90 {
-                        let tempWidth = naturalSize.width
-                        naturalSize.width = naturalSize.height
-                        naturalSize.height = tempWidth
-                    }
-                    videoComposition.renderSize = naturalSize
-                    
-                    // center the video
-                    
-                    var ratio: CGFloat = 0
-                    let xRatio: CGFloat = targetSize.width / naturalSize.width
-                    let yRatio: CGFloat = targetSize.height / naturalSize.height
-                    ratio = min(xRatio, yRatio)
-                    
-                    let postWidth = naturalSize.width * ratio
-                    let postHeight = naturalSize.height * ratio
-                    let transX = (targetSize.width - postWidth) * 0.5
-                    let transY = (targetSize.height - postHeight) * 0.5
-                    
-                    let matrix = CGAffineTransform(translationX: (transX / xRatio), y: (transY / yRatio))
-                    matrix.scaledBy(x: (ratio / xRatio), y: (ratio / yRatio))
-                    transform.concatenating(matrix)
-                    
-                    // make the composition
-                    
-                    let compositionInstruction = AVMutableVideoCompositionInstruction()
-                    compositionInstruction.timeRange = CMTimeRange(start: kCMTimeZero, duration: asset.duration)
-                    
-                    let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: videoTrack)
-                    layerInstruction.setTransform(transform, at: kCMTimeZero)
-                    
-                    compositionInstruction.layerInstructions = [layerInstruction]
-                    videoComposition.instructions = [compositionInstruction]
+                let videoWidth = videoConfiguration[AVVideoWidthKey] as? NSNumber
+                let videoHeight = videoConfiguration[AVVideoHeightKey] as? NSNumber
+                
+                let width = videoWidth!.intValue
+                let height = videoHeight!.intValue
+                
+                let targetSize = CGSize(width: width, height: height)
+                var naturalSize = videoTrack.naturalSize
+
+                let transform = videoTrack.preferredTransform
+                let videoAngleInDegrees = atan2(transform.b, transform.a) * 180 / CGFloat(M_PI)
+                if videoAngleInDegrees == 90 || videoAngleInDegrees == -90 {
+                    let tempWidth = naturalSize.width
+                    naturalSize.width = naturalSize.height
+                    naturalSize.height = tempWidth
                 }
+                videoComposition.renderSize = naturalSize
+                
+                // center the video
+                
+                var ratio: CGFloat = 0
+                let xRatio: CGFloat = targetSize.width / naturalSize.width
+                let yRatio: CGFloat = targetSize.height / naturalSize.height
+                ratio = min(xRatio, yRatio)
+                
+                let postWidth = naturalSize.width * ratio
+                let postHeight = naturalSize.height * ratio
+                let transX = (targetSize.width - postWidth) * 0.5
+                let transY = (targetSize.height - postHeight) * 0.5
+                
+                let matrix = CGAffineTransform(translationX: (transX / xRatio), y: (transY / yRatio))
+                matrix.scaledBy(x: (ratio / xRatio), y: (ratio / yRatio))
+                transform.concatenating(matrix)
+                
+                // make the composition
+                
+                let compositionInstruction = AVMutableVideoCompositionInstruction()
+                compositionInstruction.timeRange = CMTimeRange(start: kCMTimeZero, duration: asset.duration)
+                
+                let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: videoTrack)
+                layerInstruction.setTransform(transform, at: kCMTimeZero)
+                
+                compositionInstruction.layerInstructions = [layerInstruction]
+                videoComposition.instructions = [compositionInstruction]
             }
         }
         
