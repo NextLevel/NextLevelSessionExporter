@@ -44,22 +44,22 @@ class ViewController: UIViewController {
         encoder.outputURL = tmpURL
         
         var compressionDict: [String : Any] = [:]
-        compressionDict[AVVideoAverageBitRateKey] = NSNumber(value: Int(40000))
+        compressionDict[AVVideoAverageBitRateKey] = NSNumber(integerLiteral: 40000)
         compressionDict[AVVideoAllowFrameReorderingKey] = NSNumber(booleanLiteral: false)
-        compressionDict[AVVideoExpectedSourceFrameRateKey] = NSNumber(value: Int(30))
+        compressionDict[AVVideoExpectedSourceFrameRateKey] = NSNumber(integerLiteral: 30)
         
         encoder.videoOutputConfiguration = [
             AVVideoCodecKey: AVVideoCodecH264,
-            AVVideoHeightKey: NSNumber(value: 640),
-            AVVideoWidthKey: NSNumber(value: 352),
+            AVVideoHeightKey: NSNumber(integerLiteral: 640),
+            AVVideoWidthKey: NSNumber(integerLiteral: 352),
             AVVideoScalingModeKey: AVVideoScalingModeResizeAspectFill,
             AVVideoCompressionPropertiesKey: compressionDict
         ]
         encoder.audioOutputConfiguration = [
             AVFormatIDKey: kAudioFormatMPEG4AAC,
-            AVEncoderBitRateKey: NSNumber(value: Int(40000)),
-            AVNumberOfChannelsKey: NSNumber(value: Int(2)),
-            AVSampleRateKey: NSNumber(value: Int(16000))
+            AVEncoderBitRateKey: NSNumber(integerLiteral: 40000),
+            AVNumberOfChannelsKey: NSNumber(integerLiteral: 2),
+            AVSampleRateKey: NSNumber(value: Float(16000))
         ]
         
         do {
