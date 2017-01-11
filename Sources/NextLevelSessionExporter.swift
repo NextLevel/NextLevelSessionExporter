@@ -176,21 +176,6 @@ public class NextLevelSessionExporter: NSObject {
         self._videoInput = nil
         self._audioInput = nil
     }
-    
-    fileprivate func reset() {
-        self._progress = 0
-        self._writer = nil
-        self._reader = nil
-        self._pixelBufferAdaptor = nil
-        
-        self._inputQueue = nil
-        self._videoOutput = nil
-        self._audioOutput = nil
-        self._videoInput = nil
-        self._audioInput = nil
-        
-        self._completionHandler = nil
-    }
 }
 
 // MARK: - export
@@ -565,6 +550,22 @@ extension NextLevelSessionExporter {
             completionHandler()
             self._completionHandler = nil
         }
+    }
+    
+    
+    internal func reset() {
+        self._progress = 0
+        self._writer = nil
+        self._reader = nil
+        self._pixelBufferAdaptor = nil
+        
+        self._inputQueue = nil
+        self._videoOutput = nil
+        self._audioOutput = nil
+        self._videoInput = nil
+        self._audioInput = nil
+        
+        self._completionHandler = nil
     }
     
 }
