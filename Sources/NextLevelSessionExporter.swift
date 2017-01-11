@@ -182,6 +182,7 @@ public class NextLevelSessionExporter: NSObject {
 
 extension NextLevelSessionExporter {
 
+    /// Completion handler type for when an export finishes.
     public typealias NextLevelSessionExporterCompletionHandler = (Void) -> Void
     
     /// Initiates an export session.
@@ -374,11 +375,15 @@ extension NextLevelSessionExporter {
             self.reset()
         }
     }
-    
-    // MARK: - private func
+
+}
+
+// MARK: - internal funcs
+
+extension NextLevelSessionExporter {
 
     // called on the inputQueue
-    private func encode(readySamplesFromReaderOutput output: AVAssetReaderOutput, toWriterInput input: AVAssetWriterInput) -> Bool {
+    internal func encode(readySamplesFromReaderOutput output: AVAssetReaderOutput, toWriterInput input: AVAssetWriterInput) -> Bool {
         while input.isReadyForMoreMediaData {
             if let sampleBuffer = output.copyNextSampleBuffer() {
                 var handled = false
@@ -429,7 +434,7 @@ extension NextLevelSessionExporter {
         return true
     }
     
-    private func createVideoComposition() -> AVMutableVideoComposition {
+    internal func createVideoComposition() -> AVMutableVideoComposition {
         
         let videoComposition = AVMutableVideoComposition()
         
@@ -457,6 +462,7 @@ extension NextLevelSessionExporter {
             // determine the appropriate size and transform
             
             if let videoConfiguration = self.videoOutputConfiguration {
+                
                 let videoWidth = videoConfiguration[AVVideoWidthKey] as? NSNumber
                 let videoHeight = videoConfiguration[AVVideoHeightKey] as? NSNumber
                 
@@ -501,20 +507,21 @@ extension NextLevelSessionExporter {
                 
                 compositionInstruction.layerInstructions = [layerInstruction]
                 videoComposition.instructions = [compositionInstruction]
+                
             }
         }
         
         return videoComposition
     }
     
-    private func updateProgress(progress: Float) {
+    internal func updateProgress(progress: Float) {
         self.willChangeValue(forKey: "progress")
         self._progress = progress
         self.didChangeValue(forKey: "progress")
         self.delegate?.sessionExporter(self, didUpdateProgress: progress)
     }
     
-    private func finish() {
+    internal func finish() {
         if self._reader?.status == .cancelled || self._writer?.status == .cancelled {
             return
         }
@@ -533,7 +540,7 @@ extension NextLevelSessionExporter {
         }
     }
     
-    private func complete() {
+    internal func complete() {
         if self._writer?.status == .failed || self._writer?.status == .cancelled {
             if let outputURL = self.outputURL {
                 if FileManager.default.fileExists(atPath: outputURL.absoluteString) == true {
