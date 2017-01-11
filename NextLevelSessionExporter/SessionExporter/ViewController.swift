@@ -50,8 +50,8 @@ class ViewController: UIViewController {
         
         encoder.videoOutputConfiguration = [
             AVVideoCodecKey: AVVideoCodecH264,
-            AVVideoHeightKey: NSNumber(integerLiteral: 640),
-            AVVideoWidthKey: NSNumber(integerLiteral: 352),
+            AVVideoWidthKey: NSNumber(integerLiteral: 640),
+            AVVideoHeightKey: NSNumber(integerLiteral: 480),
             AVVideoScalingModeKey: AVVideoScalingModeResizeAspectFill,
             AVVideoCompressionPropertiesKey: compressionDict
         ]
