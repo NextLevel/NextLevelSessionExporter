@@ -43,23 +43,24 @@ class ViewController: UIViewController {
             .appendingPathExtension("mov")
         encoder.outputURL = tmpURL
         
-        var compressionDict: [String : Any] = [:]
-        compressionDict[AVVideoAverageBitRateKey] = NSNumber(integerLiteral: 40000)
-        compressionDict[AVVideoAllowFrameReorderingKey] = NSNumber(booleanLiteral: false)
-        compressionDict[AVVideoExpectedSourceFrameRateKey] = NSNumber(integerLiteral: 30)
-        
+        let compressionDict = [
+            AVVideoAverageBitRateKey: NSNumber(integerLiteral: 6000000),
+            AVVideoProfileLevelKey: AVVideoProfileLevelH264High40 as NSString,
+            AVVideoAllowFrameReorderingKey: NSNumber(booleanLiteral: false),
+            AVVideoExpectedSourceFrameRateKey: NSNumber(integerLiteral: 30)
+        ]
         encoder.videoOutputConfiguration = [
             AVVideoCodecKey: AVVideoCodecH264,
-            AVVideoWidthKey: NSNumber(integerLiteral: 640),
-            AVVideoHeightKey: NSNumber(integerLiteral: 480),
+            AVVideoWidthKey: NSNumber(integerLiteral: 1920),
+            AVVideoHeightKey: NSNumber(integerLiteral: 1080),
             AVVideoScalingModeKey: AVVideoScalingModeResizeAspectFill,
             AVVideoCompressionPropertiesKey: compressionDict
         ]
         encoder.audioOutputConfiguration = [
             AVFormatIDKey: kAudioFormatMPEG4AAC,
-            AVEncoderBitRateKey: NSNumber(integerLiteral: 40000),
+            AVEncoderBitRateKey: NSNumber(integerLiteral: 128000),
             AVNumberOfChannelsKey: NSNumber(integerLiteral: 2),
-            AVSampleRateKey: NSNumber(value: Float(16000))
+            AVSampleRateKey: NSNumber(value: Float(44100))
         ]
         
         do {
