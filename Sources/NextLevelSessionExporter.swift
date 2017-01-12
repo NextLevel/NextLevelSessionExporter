@@ -214,6 +214,11 @@ extension NextLevelSessionExporter {
         } else {
             throw NextLevelSessionExporterError.setupFailure
         }
+      
+        if self.validateVideoOutputConfiguration() == false {
+            print("NextLevelSessionExporter, could not setup with the specified video output configuration")
+            throw NextLevelSessionExporterError.setupFailure
+        }
         
         self._reader?.timeRange = self.timeRange
         self._writer?.shouldOptimizeForNetworkUse = self.optimizeForNetworkUse
@@ -466,6 +471,7 @@ extension NextLevelSessionExporter {
                 let videoWidth = videoConfiguration[AVVideoWidthKey] as? NSNumber
                 let videoHeight = videoConfiguration[AVVideoHeightKey] as? NSNumber
                 
+                // validated to be non-nil byt this point
                 let width = videoWidth!.intValue
                 let height = videoHeight!.intValue
                 
@@ -559,6 +565,20 @@ extension NextLevelSessionExporter {
         }
     }
     
+    internal func validateVideoOutputConfiguration() -> Bool {
+        if let videoOutputConfiguration = self.videoOutputConfiguration {            
+            let videoWidth = videoOutputConfiguration[AVVideoWidthKey] as? NSNumber
+            let videoHeight = videoOutputConfiguration[AVVideoHeightKey] as? NSNumber
+            if videoWidth == nil || videoHeight == nil {
+                return false
+            }
+            
+            // TODO add more checks when needed
+            
+            return true
+        }
+        return false
+    }
     
     internal func reset() {
         self._progress = 0
