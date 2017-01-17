@@ -401,8 +401,7 @@ extension NextLevelSessionExporter {
                 
                 if handled == false && self._videoOutput == output {
                     // determine progress
-                    self._lastSamplePresentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-                    self._lastSamplePresentationTime = self._lastSamplePresentationTime - self.timeRange.start
+                    self._lastSamplePresentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer) - self.timeRange.start
                     let progress = self._duration == 0 ? 1 : Float(CMTimeGetSeconds(self._lastSamplePresentationTime) / self._duration)
                     self.updateProgress(progress: progress)
                     
