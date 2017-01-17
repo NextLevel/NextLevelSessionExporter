@@ -271,7 +271,7 @@ extension NextLevelSessionExporter {
                     // setup pixelbuffer adaptor
                     
                     var pixelBufferAttrib: [String : Any] = [:]
-                    pixelBufferAttrib[kCVPixelBufferPixelFormatTypeKey as String] = NSNumber(integerLiteral: Int(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange))
+                    pixelBufferAttrib[kCVPixelBufferPixelFormatTypeKey as String] = NSNumber(integerLiteral: Int(kCVPixelFormatType_32BGRA))
                     if let videoComposition = self._videoOutput?.videoComposition {
                         pixelBufferAttrib[kCVPixelBufferWidthKey as String] = NSNumber(integerLiteral: Int(videoComposition.renderSize.width))
                         pixelBufferAttrib[kCVPixelBufferHeightKey as String] = NSNumber(integerLiteral: Int(videoComposition.renderSize.height))
@@ -566,7 +566,7 @@ extension NextLevelSessionExporter {
     }
     
     internal func validateVideoOutputConfiguration() -> Bool {
-        if let videoOutputConfiguration = self.videoOutputConfiguration {            
+        if let videoOutputConfiguration = self.videoOutputConfiguration {
             let videoWidth = videoOutputConfiguration[AVVideoWidthKey] as? NSNumber
             let videoHeight = videoOutputConfiguration[AVVideoHeightKey] as? NSNumber
             if videoWidth == nil || videoHeight == nil {
