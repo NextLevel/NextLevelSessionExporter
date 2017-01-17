@@ -478,7 +478,7 @@ extension NextLevelSessionExporter {
                 let targetSize = CGSize(width: width, height: height)
                 var naturalSize = videoTrack.naturalSize
 
-                let transform = videoTrack.preferredTransform
+                var transform = videoTrack.preferredTransform
                 let videoAngleInDegrees = atan2(transform.b, transform.a) * 180 / CGFloat(M_PI)
                 if videoAngleInDegrees == 90 || videoAngleInDegrees == -90 {
                     let tempWidth = naturalSize.width
@@ -499,9 +499,9 @@ extension NextLevelSessionExporter {
                 let transX = (targetSize.width - postWidth) * 0.5
                 let transY = (targetSize.height - postHeight) * 0.5
                 
-                let matrix = CGAffineTransform(translationX: (transX / xRatio), y: (transY / yRatio))
-                matrix.scaledBy(x: (ratio / xRatio), y: (ratio / yRatio))
-                transform.concatenating(matrix)
+                var matrix = CGAffineTransform(translationX: (transX / xRatio), y: (transY / yRatio))
+                matrix = matrix.scaledBy(x: (ratio / xRatio), y: (ratio / yRatio))
+                transform = transform.concatenating(matrix)
                 
                 // make the composition
                 
