@@ -158,7 +158,7 @@ public class NextLevelSessionExporter: NSObject {
     
     override init() {
         self.timeRange = CMTimeRange(start: kCMTimeZero, end: kCMTimePositiveInfinity)
-        self.expectsMediaDataInRealTime = true
+        self.expectsMediaDataInRealTime = false
         self.optimizeForNetworkUse = false
         self._progress = 0
         self._duration = 0
@@ -447,15 +447,15 @@ extension NextLevelSessionExporter {
             
             // determine the framerate
             
-            var frameRate: Int = 0
+            var frameRate: Float = 0
             if let videoConfiguration = self.videoOutputConfiguration {
                 if let videoCompressionConfiguration = videoConfiguration[AVVideoCompressionPropertiesKey] as? [String: Any] {
-                    if let maxKeyFrameInterval = videoCompressionConfiguration[AVVideoMaxKeyFrameIntervalKey] as? NSNumber {
-                        frameRate = maxKeyFrameInterval.intValue
+                    if let trackFrameRate = videoCompressionConfiguration[AVVideoAverageNonDroppableFrameRateKey] as? NSNumber {
+                        frameRate = trackFrameRate.floatValue
                     }
                 }
             } else {
-                frameRate = Int(videoTrack.nominalFrameRate)
+                frameRate = videoTrack.nominalFrameRate
             }
             
             if frameRate == 0 {
