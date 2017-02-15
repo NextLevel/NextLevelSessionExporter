@@ -419,8 +419,6 @@ extension NextLevelSessionExporter {
                         let result = CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pixelBufferPool, &renderBuffer)
                         if result == kCVReturnSuccess {
                             if let buffer = renderBuffer {
-                                let image: UIImage? = self.uiimageFromSampleBuffer(pixelBuffer: buffer)
-                                
                                 self.delegate?.sessionExporter(self, didRenderFrame: pixelBuffer, withPresentationTime: self._lastSamplePresentationTime, toRenderBuffer: buffer)
                                 if pixelBufferAdaptor.append(buffer, withPresentationTime:self._lastSamplePresentationTime) == false {
                                     error = true
