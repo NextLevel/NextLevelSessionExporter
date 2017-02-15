@@ -45,7 +45,7 @@ class ViewController: UIViewController {
         
         let compressionDict = [
             AVVideoAverageBitRateKey: NSNumber(integerLiteral: 6000000),
-            AVVideoProfileLevelKey: AVVideoProfileLevelH264High40 as NSString,
+            AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel as NSString,
             AVVideoAllowFrameReorderingKey: NSNumber(booleanLiteral: false),
             AVVideoExpectedSourceFrameRateKey: NSNumber(integerLiteral: 30)
         ]

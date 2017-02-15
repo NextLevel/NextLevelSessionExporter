@@ -157,6 +157,7 @@ public class NextLevelSessionExporter: NSObject {
     }
     
     override init() {
+        self.outputFileType = AVFileTypeMPEG4
         self.timeRange = CMTimeRange(start: kCMTimeZero, end: kCMTimePositiveInfinity)
         self.expectsMediaDataInRealTime = false
         self.optimizeForNetworkUse = false
@@ -259,9 +260,13 @@ extension NextLevelSessionExporter {
                 }
                 
                 // video input
+                if self._writer?.canApply(outputSettings: self.videoOutputConfiguration, forMediaType: AVMediaTypeVideo) == true {
+                    self._videoInput = AVAssetWriterInput(mediaType: AVMediaTypeVideo, outputSettings: self.videoOutputConfiguration)
+                    self._videoInput?.expectsMediaDataInRealTime = self.expectsMediaDataInRealTime
+                } else {
+                    fatalError("Unsupported output configuration")
+                }
                 
-                self._videoInput = AVAssetWriterInput(mediaType: AVMediaTypeVideo, outputSettings: self.videoOutputConfiguration)
-                self._videoInput?.expectsMediaDataInRealTime = self.expectsMediaDataInRealTime
                 if let writer = self._writer,
                     let videoInput = self._videoInput {
                     if writer.canAdd(videoInput) {
@@ -411,13 +416,17 @@ extension NextLevelSessionExporter {
                         let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
                         
                         var renderBuffer: CVPixelBuffer? = nil
-                        CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pixelBufferPool, &renderBuffer)
-                        if let buffer = renderBuffer {
-                            self.delegate?.sessionExporter(self, didRenderFrame: pixelBuffer, withPresentationTime: self._lastSamplePresentationTime, toRenderBuffer: buffer)
-                            if pixelBufferAdaptor.append(buffer, withPresentationTime:self._lastSamplePresentationTime) == false {
-                                error = true
+                        let result = CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pixelBufferPool, &renderBuffer)
+                        if result == kCVReturnSuccess {
+                            if let buffer = renderBuffer {
+                                let image: UIImage? = self.uiimageFromSampleBuffer(pixelBuffer: buffer)
+                                
+                                self.delegate?.sessionExporter(self, didRenderFrame: pixelBuffer, withPresentationTime: self._lastSamplePresentationTime, toRenderBuffer: buffer)
+                                if pixelBufferAdaptor.append(buffer, withPresentationTime:self._lastSamplePresentationTime) == false {
+                                    error = true
+                                }
+                                handled = true
                             }
-                            handled = true
                         }
                     }
                 }
