@@ -485,7 +485,7 @@ extension NextLevelSessionExporter {
                 var naturalSize = videoTrack.naturalSize
 
                 var transform = videoTrack.preferredTransform
-                let videoAngleInDegrees = atan2(transform.b, transform.a) * 180 / CGFloat(M_PI)
+                let videoAngleInDegrees = atan2(transform.b, transform.a) * 180 / .pi
                 if videoAngleInDegrees == 90 || videoAngleInDegrees == -90 {
                     let tempWidth = naturalSize.width
                     naturalSize.width = naturalSize.height
