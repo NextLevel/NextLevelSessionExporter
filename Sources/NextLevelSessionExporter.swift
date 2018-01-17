@@ -157,7 +157,7 @@ public class NextLevelSessionExporter: NSObject {
     }
     
     override init() {
-        self.outputFileType = AVFileTypeMPEG4
+        self.outputFileType = AVFileType.mp4.rawValue
         self.timeRange = CMTimeRange(start: kCMTimeZero, end: kCMTimePositiveInfinity)
         self.expectsMediaDataInRealTime = false
         self.optimizeForNetworkUse = false
@@ -206,7 +206,7 @@ extension NextLevelSessionExporter {
             }
             
             do {
-                self._writer = try AVAssetWriter(outputURL: outputURL, fileType: outputFileType)
+              self._writer = try AVAssetWriter(outputURL: outputURL, fileType: AVFileType(rawValue: outputFileType))
             } catch {
                 print("NextLevelSessionExporter, could not setup a reader for the provided asset \(asset)")
                 return
@@ -241,7 +241,7 @@ extension NextLevelSessionExporter {
         
         // video output
         
-        if let videoTracks = self.asset?.tracks(withMediaType: AVMediaTypeVideo) {
+        if let videoTracks = self.asset?.tracks(withMediaType: AVMediaType.video) {
             if videoTracks.count > 0 {
                 self._videoOutput = AVAssetReaderVideoCompositionOutput(videoTracks: videoTracks, videoSettings: self.videoInputConfiguration)
                 self._videoOutput?.alwaysCopiesSampleData = false
@@ -260,8 +260,8 @@ extension NextLevelSessionExporter {
                 }
                 
                 // video input
-                if self._writer?.canApply(outputSettings: self.videoOutputConfiguration, forMediaType: AVMediaTypeVideo) == true {
-                    self._videoInput = AVAssetWriterInput(mediaType: AVMediaTypeVideo, outputSettings: self.videoOutputConfiguration)
+                if self._writer?.canApply(outputSettings: self.videoOutputConfiguration, forMediaType: AVMediaType.video) == true {
+                    self._videoInput = AVAssetWriterInput(mediaType: AVMediaType.video, outputSettings: self.videoOutputConfiguration)
                     self._videoInput?.expectsMediaDataInRealTime = self.expectsMediaDataInRealTime
                 } else {
                     fatalError("Unsupported output configuration")
@@ -291,7 +291,7 @@ extension NextLevelSessionExporter {
         
         // audio output
         
-        if let audioTracks = self.asset?.tracks(withMediaType: AVMediaTypeAudio) {
+        if let audioTracks = self.asset?.tracks(withMediaType: AVMediaType.audio) {
             if audioTracks.count > 0 {
                 self._audioOutput = AVAssetReaderAudioMixOutput(audioTracks: audioTracks, audioSettings: nil)
                 self._audioOutput?.alwaysCopiesSampleData = false
@@ -310,7 +310,7 @@ extension NextLevelSessionExporter {
         // audio input
         
         if let _ = self._audioOutput {
-            self._audioInput = AVAssetWriterInput(mediaType: AVMediaTypeAudio, outputSettings: self.audioOutputConfiguration)
+            self._audioInput = AVAssetWriterInput(mediaType: AVMediaType.audio, outputSettings: self.audioOutputConfiguration)
             self._audioInput?.expectsMediaDataInRealTime = self.expectsMediaDataInRealTime
             if let writer = self._writer,
                 let audioInput = self._audioInput {
@@ -332,7 +332,7 @@ extension NextLevelSessionExporter {
         self._inputQueue = DispatchQueue(label: NextLevelSessionExporterInputQueue, autoreleaseFrequency: .workItem, target: DispatchQueue.global())
         if let inputQueue = self._inputQueue {
             
-            if let videoTracks = self.asset?.tracks(withMediaType: AVMediaTypeVideo),
+            if let videoTracks = self.asset?.tracks(withMediaType: AVMediaType.video),
                 let videoInput = self._videoInput,
                 let videoOutput = self._videoOutput {
                 if videoTracks.count > 0 {
@@ -450,7 +450,7 @@ extension NextLevelSessionExporter {
         let videoComposition = AVMutableVideoComposition()
         
         if let asset = self.asset,
-            let videoTrack = asset.tracks(withMediaType: AVMediaTypeVideo).first {
+            let videoTrack = asset.tracks(withMediaType: AVMediaType.video).first {
             
             // determine the framerate
             
