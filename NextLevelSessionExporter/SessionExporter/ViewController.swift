@@ -37,7 +37,7 @@ class ViewController: UIViewController {
         
         let encoder = NextLevelSessionExporter(withAsset: asset)
         encoder.delegate = self
-        encoder.outputFileType = AVFileTypeMPEG4
+        encoder.outputFileType = AVFileType.mp4.rawValue
         let tmpURL = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
             .appendingPathComponent(ProcessInfo().globallyUniqueString)
             .appendingPathExtension("mov")
