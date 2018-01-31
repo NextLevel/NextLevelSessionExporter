@@ -40,14 +40,12 @@ class ViewController: UIViewController {
         encoder.outputFileType = AVFileType.mp4.rawValue
         let tmpURL = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
             .appendingPathComponent(ProcessInfo().globallyUniqueString)
-            .appendingPathExtension("mov")
+            .appendingPathExtension("mp4")
         encoder.outputURL = tmpURL
         
-        let compressionDict = [
+        let compressionDict: [String: Any] = [
             AVVideoAverageBitRateKey: NSNumber(integerLiteral: 6000000),
-            AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel as NSString,
-            AVVideoAllowFrameReorderingKey: NSNumber(booleanLiteral: false),
-            AVVideoExpectedSourceFrameRateKey: NSNumber(integerLiteral: 30)
+            AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel as String,
         ]
         encoder.videoOutputConfiguration = [
             AVVideoCodecKey: AVVideoCodecH264,
@@ -67,7 +65,7 @@ class ViewController: UIViewController {
             try encoder.export(withCompletionHandler: { () in
                 switch encoder.status {
                 case .completed:
-                    print("NextLevelSessionExporter, export completed, \(encoder.outputURL)")
+                    print("NextLevelSessionExporter, export completed, \(encoder.outputURL?.description ?? "")")
                     self.saveVideo(withURL: encoder.outputURL!)
                     break
                 case .cancelled:
