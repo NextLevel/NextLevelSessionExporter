@@ -89,16 +89,16 @@ public class NextLevelSessionExporter: NSObject {
     
     /// Metadata to be added to an export.
     public var metadata: [AVMetadataItem]?
-
+    
     /// Video input configuration dictionary, using keys defined in `<CoreVideo/CVPixelBuffer.h>`
     public var videoInputConfiguration: [String : Any]?
-
+    
     /// Video output configuration dictionary, using keys defined in `<AVFoundation/AVVideoSettings.h>`
     public var videoOutputConfiguration: [String : Any]?
     
     /// Audio output configuration dictionary, using keys defined in `<CoreVideo/CVPixelBuffer.h>`
     public var audioOutputConfiguration: [String : Any]?
-
+    
     /// Export session status state.
     public var status: AVAssetExportSessionStatus {
         get {
@@ -139,7 +139,7 @@ public class NextLevelSessionExporter: NSObject {
     internal var _audioOutput: AVAssetReaderAudioMixOutput?
     internal var _videoInput: AVAssetWriterInput?
     internal var _audioInput: AVAssetWriterInput?
-
+    
     internal var _progress: Float
     internal var _completionHandler: (() -> Void)?
     
@@ -182,9 +182,9 @@ public class NextLevelSessionExporter: NSObject {
 // MARK: - export
 
 extension NextLevelSessionExporter {
-
+    
     /// Completion handler type for when an export finishes.
-    public typealias NextLevelSessionExporterCompletionHandler = (Void) -> Void
+    public typealias NextLevelSessionExporterCompletionHandler = () -> Void
     
     /// Initiates an export session.
     ///
@@ -206,7 +206,7 @@ extension NextLevelSessionExporter {
             }
             
             do {
-              self._writer = try AVAssetWriter(outputURL: outputURL, fileType: AVFileType(rawValue: outputFileType))
+                self._writer = try AVAssetWriter(outputURL: outputURL, fileType: AVFileType(rawValue: outputFileType))
             } catch {
                 print("NextLevelSessionExporter, could not setup a reader for the provided asset \(asset)")
                 return
@@ -215,7 +215,7 @@ extension NextLevelSessionExporter {
         } else {
             throw NextLevelSessionExporterError.setupFailure
         }
-      
+        
         if self.validateVideoOutputConfiguration() == false {
             print("NextLevelSessionExporter, could not setup with the specified video output configuration")
             throw NextLevelSessionExporterError.setupFailure
@@ -276,7 +276,7 @@ extension NextLevelSessionExporter {
                     // setup pixelbuffer adaptor
                     
                     var pixelBufferAttrib: [String : Any] = [:]
-                    pixelBufferAttrib[kCVPixelBufferPixelFormatTypeKey as String] = NSNumber(integerLiteral: Int(kCVPixelFormatType_32BGRA))
+                    pixelBufferAttrib[kCVPixelBufferPixelFormatTypeKey as String] = NSNumber(integerLiteral: Int(kCVPixelFormatType_32RGBA))
                     if let videoComposition = self._videoOutput?.videoComposition {
                         pixelBufferAttrib[kCVPixelBufferWidthKey as String] = NSNumber(integerLiteral: Int(videoComposition.renderSize.width))
                         pixelBufferAttrib[kCVPixelBufferHeightKey as String] = NSNumber(integerLiteral: Int(videoComposition.renderSize.height))
@@ -358,7 +358,7 @@ extension NextLevelSessionExporter {
             } else {
                 audioSemaphore.signal()
             }
-
+            
             DispatchQueue.global().async {
                 audioSemaphore.wait()
                 videoSemaphore.wait()
@@ -385,13 +385,13 @@ extension NextLevelSessionExporter {
             self.reset()
         }
     }
-
+    
 }
 
 // MARK: - internal funcs
 
 extension NextLevelSessionExporter {
-
+    
     // called on the inputQueue
     internal func encode(readySamplesFromReaderOutput output: AVAssetReaderOutput, toWriterInput input: AVAssetWriterInput) -> Bool {
         while input.isReadyForMoreMediaData {
@@ -428,7 +428,7 @@ extension NextLevelSessionExporter {
                         }
                     }
                 }
-
+                
                 if handled == false && input.append(sampleBuffer) == false {
                     error = true
                 }
@@ -483,8 +483,16 @@ extension NextLevelSessionExporter {
                 
                 let targetSize = CGSize(width: width, height: height)
                 var naturalSize = videoTrack.naturalSize
-
+                
                 var transform = videoTrack.preferredTransform
+                
+                let rect = CGRect(x: 0, y: 0, width: naturalSize.width, height: naturalSize.height)
+                let transformedRect = rect.applying(transform)
+                // transformedRect should have origin at 0 if correct; otherwise add offset to correct it
+                transform.tx -= transformedRect.origin.x;
+                transform.ty -= transformedRect.origin.y;
+                
+                
                 let videoAngleInDegrees = atan2(transform.b, transform.a) * 180 / .pi
                 if videoAngleInDegrees == 90 || videoAngleInDegrees == -90 {
                     let tempWidth = naturalSize.width
@@ -537,12 +545,16 @@ extension NextLevelSessionExporter {
         if self._reader?.status == .cancelled || self._writer?.status == .cancelled {
             return
         }
-    
+        
         if self._writer?.status == .failed {
-            debugPrint("NextLevelSessionExporter, writing failed, \(self._writer?.error)")
+            if let error = self._writer?.error {
+                debugPrint("NextLevelSessionExporter, writing failed, \(error)")
+            }
             self.complete()
         } else if self._reader?.status == .failed {
-            debugPrint("NextLevelSessionExporter, reading failed, \(self._reader?.error)")
+            if let error = self._writer?.error {
+                debugPrint("NextLevelSessionExporter, reading failed, \(error)")
+            }
             self._writer?.cancelWriting()
             self.complete()
         } else {
@@ -602,3 +614,5 @@ extension NextLevelSessionExporter {
     }
     
 }
+
+
