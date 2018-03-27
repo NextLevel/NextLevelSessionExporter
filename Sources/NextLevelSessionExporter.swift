@@ -43,25 +43,12 @@ public enum NextLevelSessionExporterError: Error, CustomStringConvertible {
     }
 }
 
-// MARK: - NextLevelSessionExporterDelegate
-
-/// A session exporter's delegate protocol.
-public protocol NextLevelSessionExporterDelegate: NSObjectProtocol {
-    func sessionExporter(_ sessionExporter: NextLevelSessionExporter, didUpdateProgress progress: Float)
-    func sessionExporter(_ sessionExporter: NextLevelSessionExporter, didRenderFrame renderFrame: CVPixelBuffer, withPresentationTime presentationTime: CMTime, toRenderBuffer renderBuffer: CVPixelBuffer)
-}
-
 // MARK: - NextLevelSessionExporter
 
 private let NextLevelSessionExporterInputQueue = "NextLevelSessionExporterInputQueue"
 
 /// 🔄 NextLevelSessionExporter, export and transcode media in Swift
 public class NextLevelSessionExporter: NSObject {
-    
-    /// A session exporter's delegate.
-    public weak var delegate: NextLevelSessionExporterDelegate?
-    
-    // config
     
     /// Input asset for export, provided when initialized.
     public var asset: AVAsset?
@@ -141,7 +128,10 @@ public class NextLevelSessionExporter: NSObject {
     internal var _audioInput: AVAssetWriterInput?
     
     internal var _progress: Float = 0
-    internal var _completionHandler: (() -> Void)?
+    
+    internal var _progressHandler: ProgressHandler?
+    internal var _renderHandler: RenderHandler?
+    internal var _completionHandler: CompletionHandler?
     
     internal var _duration: TimeInterval = 0
     internal var _lastSamplePresentationTime: CMTime = kCMTimeInvalid
@@ -178,14 +168,23 @@ public class NextLevelSessionExporter: NSObject {
 extension NextLevelSessionExporter {
     
     /// Completion handler type for when an export finishes.
-    public typealias NextLevelSessionExporterCompletionHandler = () -> Void
+    public typealias CompletionHandler = (_ status: AVAssetExportSessionStatus) -> Void
+    
+    /// Progress handler type
+    public typealias ProgressHandler = (_ progress: Float) -> Void
+    
+    /// Render handler type for frame processing
+    public typealias RenderHandler = (_ renderFrame: CVPixelBuffer, _ presentationTime: CMTime, _ resultingBuffer: CVPixelBuffer) -> Void
     
     /// Initiates an export session.
     ///
     /// - Parameter completionHandler: Handler called when an export session completes.
     /// - Throws: Failure indication thrown when an error has occurred during export.
-    public func export(withCompletionHandler completionHandler: NextLevelSessionExporterCompletionHandler? = nil) throws {
+    public func export(renderHandler: RenderHandler? = nil, progressHandler: ProgressHandler? = nil, completionHandler: CompletionHandler? = nil) throws {
         self.cancelExport()
+        
+        self._progressHandler = progressHandler
+        self._renderHandler = renderHandler
         self._completionHandler = completionHandler
         
         if let outputURL = self.outputURL,
@@ -413,12 +412,12 @@ extension NextLevelSessionExporter {
                         let pixelBufferPool = pixelBufferAdaptor.pixelBufferPool,
                         let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
                         
-                        var renderBuffer: CVPixelBuffer? = nil
-                        let result = CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pixelBufferPool, &renderBuffer)
+                        var toRenderBuffer: CVPixelBuffer? = nil
+                        let result = CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pixelBufferPool, &toRenderBuffer)
                         if result == kCVReturnSuccess {
-                            if let buffer = renderBuffer {
-                                self.delegate?.sessionExporter(self, didRenderFrame: pixelBuffer, withPresentationTime: self._lastSamplePresentationTime, toRenderBuffer: buffer)
-                                if pixelBufferAdaptor.append(buffer, withPresentationTime:self._lastSamplePresentationTime) == false {
+                            if let toBuffer = toRenderBuffer {
+                                self._renderHandler?(pixelBuffer, self._lastSamplePresentationTime, toBuffer)
+                                if pixelBufferAdaptor.append(toBuffer, withPresentationTime:self._lastSamplePresentationTime) == false {
                                     error = true
                                 }
                                 handled = true
@@ -536,7 +535,7 @@ extension NextLevelSessionExporter {
         self.willChangeValue(forKey: "progress")
         self._progress = progress
         self.didChangeValue(forKey: "progress")
-        self.delegate?.sessionExporter(self, didUpdateProgress: progress)
+        self._progressHandler?(progress)
     }
     
     internal func finish() {
@@ -575,7 +574,7 @@ extension NextLevelSessionExporter {
             }
         }
         
-        self._completionHandler?()
+        self._completionHandler?(self.status)
         self._completionHandler = nil
     }
     
@@ -605,10 +604,43 @@ extension NextLevelSessionExporter {
         self._audioOutput = nil
         self._videoInput = nil
         self._audioInput = nil
-        
+
+        self._progressHandler = nil
+        self._renderHandler = nil
         self._completionHandler = nil
     }
     
 }
 
+// MARK: - AVAsset extension
 
+extension AVAsset {
+
+    /// Initiates a NextLevelSessionExport on the asset
+    ///
+    /// - Parameters:
+    ///   - outputFileType: type of resulting file to create
+    ///   - outputURL: location of resulting file
+    ///   - metadata: data to embed in the result
+    ///   - videoInputConfiguration: video input configuration
+    ///   - videoOutputConfiguration: video output configuration
+    ///   - audioOutputConfiguration: audio output configuration
+    ///   - progressHandler: progress fraction handler
+    ///   - completionHandler: completion handler
+    public func nextlevel_export(outputFileType: AVFileType? = AVFileType.mp4,
+                                   outputURL: URL,
+                                   metadata: [AVMetadataItem]? = nil,
+                                   videoInputConfiguration: [String : Any]? = nil,
+                                   videoOutputConfiguration: [String : Any],
+                                   audioOutputConfiguration: [String : Any],
+                                   progressHandler: NextLevelSessionExporter.ProgressHandler? = nil,
+                                   completionHandler: NextLevelSessionExporter.CompletionHandler? = nil) {
+        let exporter = NextLevelSessionExporter(withAsset: self)
+        exporter.outputFileType = outputFileType
+        exporter.outputURL = outputURL
+        exporter.videoOutputConfiguration = videoOutputConfiguration
+        exporter.audioOutputConfiguration = audioOutputConfiguration
+        try? exporter.export(progressHandler: progressHandler, completionHandler: completionHandler)
+    }
+    
+}
