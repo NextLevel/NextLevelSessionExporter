@@ -37,26 +37,26 @@ Alternatively, drop the [source files](https://github.com/NextLevel/NextLevelSes
 ## Example
 
 ``` Swift
-let encoder = NextLevelSessionExporter(withAsset: asset)
-encoder.delegate = self
-encoder.outputFileType = AVFileType.mp4.rawValue
+let exporter = NextLevelSessionExporter(withAsset: asset)
+exporter.delegate = self
+exporter.outputFileType = AVFileType.mp4
 let tmpURL = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
     .appendingPathComponent(ProcessInfo().globallyUniqueString)
     .appendingPathExtension("mp4")
-encoder.outputURL = tmpURL
+exporter.outputURL = tmpURL
 
 let compressionDict: [String: Any] = [
     AVVideoAverageBitRateKey: NSNumber(integerLiteral: 6000000),
     AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel as String,
 ]
-encoder.videoOutputConfiguration = [
-    AVVideoCodecKey: AVVideoCodecH264,
+exporter.videoOutputConfiguration = [
+    AVVideoCodecKey: AVVideoCodec.h264,
     AVVideoWidthKey: NSNumber(integerLiteral: 1920),
     AVVideoHeightKey: NSNumber(integerLiteral: 1080),
     AVVideoScalingModeKey: AVVideoScalingModeResizeAspectFill,
     AVVideoCompressionPropertiesKey: compressionDict
 ]
-encoder.audioOutputConfiguration = [
+exporter.audioOutputConfiguration = [
     AVFormatIDKey: kAudioFormatMPEG4AAC,
     AVEncoderBitRateKey: NSNumber(integerLiteral: 128000),
     AVNumberOfChannelsKey: NSNumber(integerLiteral: 2),
@@ -64,7 +64,7 @@ encoder.audioOutputConfiguration = [
 ]
 
 do {
-    try encoder.export(withCompletionHandler: { () in                
+    try exporter.export(withCompletionHandler: { () in                
         switch encoder.status {
         case .completed:
             print("video export completed")

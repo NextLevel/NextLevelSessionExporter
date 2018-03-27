@@ -575,10 +575,8 @@ extension NextLevelSessionExporter {
             }
         }
         
-        if let completionHandler = self._completionHandler {
-            completionHandler()
-            self._completionHandler = nil
-        }
+        self._completionHandler?()
+        self._completionHandler = nil
     }
     
     internal func validateVideoOutputConfiguration() -> Bool {
