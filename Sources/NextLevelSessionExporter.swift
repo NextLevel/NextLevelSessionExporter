@@ -184,7 +184,7 @@ extension NextLevelSessionExporter {
     ///
     /// - Parameter completionHandler: Handler called when an export session completes.
     /// - Throws: Failure indication thrown when an error has occurred during export.
-    public func export(withCompletionHandler completionHandler: @escaping NextLevelSessionExporterCompletionHandler) throws {
+    public func export(withCompletionHandler completionHandler: NextLevelSessionExporterCompletionHandler? = nil) throws {
         self.cancelExport()
         self._completionHandler = completionHandler
         
