@@ -230,7 +230,11 @@ extension NextLevelSessionExporter {
         
         if self.videoOutputConfiguration?.keys.contains(AVVideoCodecKey) == false {
             print("NextLevelSessionExporter, warning a video output configuration codec wasn't specified")
-            self.videoOutputConfiguration?[AVVideoCodecKey] = AVVideoCodecH264
+            if #available(iOS 11.0, *) {
+                self.videoOutputConfiguration?[AVVideoCodecKey] = AVVideoCodecType.h264
+            } else {
+                self.videoOutputConfiguration?[AVVideoCodecKey] = AVVideoCodecH264
+            }
         }
         
         // video output
