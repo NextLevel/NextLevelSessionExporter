@@ -16,11 +16,11 @@ The library provides customizable audio and video encoding options unlike `AVAss
 
 # CocoaPods
 
-pod "NextLevelSessionExporter", "~> 0.0.3"
+pod "NextLevelSessionExporter", "~> 0.1.0"
 
 # Carthage
 
-github "nextlevel/NextLevelSessionExporter" ~> 0.0.3
+github "nextlevel/NextLevelSessionExporter" ~> 0.1.0
 
 # Swift PM
 
@@ -36,9 +36,40 @@ Alternatively, drop the [source files](https://github.com/NextLevel/NextLevelSes
 
 ## Example
 
+You can simply use the `AVAsset` extension or create and use an instance of `NextLevelSessionExporter` directly.
+
+```Swift
+let tmpURL = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+    .appendingPathComponent(ProcessInfo().globallyUniqueString)
+    .appendingPathExtension("mp4")
+exporter.outputURL = tmpURL
+
+let compressionDict: [String: Any] = [
+    AVVideoAverageBitRateKey: NSNumber(integerLiteral: 6000000),
+    AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel as String,
+]
+let videoOutputConfig = [
+    AVVideoCodecKey: AVVideoCodec.h264,
+    AVVideoWidthKey: NSNumber(integerLiteral: 1920),
+    AVVideoHeightKey: NSNumber(integerLiteral: 1080),
+    AVVideoScalingModeKey: AVVideoScalingModeResizeAspectFill,
+    AVVideoCompressionPropertiesKey: compressionDict
+]
+let audioOutputConfig = [
+    AVFormatIDKey: kAudioFormatMPEG4AAC,
+    AVEncoderBitRateKey: NSNumber(integerLiteral: 128000),
+    AVNumberOfChannelsKey: NSNumber(integerLiteral: 2),
+    AVSampleRateKey: NSNumber(value: Float(44100))
+]
+
+let asset = AVAsset(url: Bundle.main.url(forResource: "TestVideo", withExtension: "mov")!)
+asset.nextlevel_export.nextlevel_export(outputURL: tmpURL, videoOutputConfiguration: videoOutputConfig, audioOutputConfiguration: audioOutputConfig)
+```
+
+Alternatively, using `NextLevelSessionExporter` directly.
+
 ``` Swift
 let exporter = NextLevelSessionExporter(withAsset: asset)
-exporter.delegate = self
 exporter.outputFileType = AVFileType.mp4
 let tmpURL = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
     .appendingPathComponent(ProcessInfo().globallyUniqueString)
@@ -64,7 +95,7 @@ exporter.audioOutputConfiguration = [
 ]
 
 do {
-    try exporter.export(withCompletionHandler: { () in                
+    try exporter.export(completionHandler: { () in                
         switch encoder.status {
         case .completed:
             print("video export completed")
@@ -89,7 +120,6 @@ do {
 
 ## Resources
 
-* [Swift Evolution](https://github.com/apple/swift-evolution)
 * [AV Foundation Programming Guide](https://developer.apple.com/library/ios/documentation/AudioVideo/Conceptual/AVFoundationPG/Articles/00_Introduction.html)
 * [AV Foundation Framework Reference](https://developer.apple.com/library/ios/documentation/AVFoundation/Reference/AVFoundationFramework/)
 * [NextLevel](https://github.com/NextLevel/NextLevel), Rad Media Capture in Swift
@@ -98,4 +128,4 @@ do {
 
 ## License
 
-NextLevelSessionExporter is available under the MIT license, see the [LICENSE](https://github.com/NextLevel/NextLevelSessionExporter/blob/master/LICENSE) file for more information.
+`NextLevelSessionExporter` is available under the MIT license, see the [LICENSE](https://github.com/NextLevel/NextLevelSessionExporter/blob/master/LICENSE) file for more information.
