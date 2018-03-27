@@ -32,29 +32,31 @@ class ViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        // TODO setup session exporter test
+        // Note: alternatively, one can use asset.nextlevel_export(...)
+        //    .nextlevel_export(outputURL: tmpURL, videoOutputConfiguration: videoOutputConfig, audioOutputConfiguration: audioOutputConfig) {
+        //    }
+        
         let asset = AVAsset(url: Bundle.main.url(forResource: "TestVideo", withExtension: "mov")!)
         
-        let encoder = NextLevelSessionExporter(withAsset: asset)
-        encoder.delegate = self
-        encoder.outputFileType = AVFileType.mp4
+        let exporter = NextLevelSessionExporter(withAsset: asset)
+        exporter.outputFileType = AVFileType.mp4
         let tmpURL = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
             .appendingPathComponent(ProcessInfo().globallyUniqueString)
             .appendingPathExtension("mp4")
-        encoder.outputURL = tmpURL
+        exporter.outputURL = tmpURL
         
         let compressionDict: [String: Any] = [
             AVVideoAverageBitRateKey: NSNumber(integerLiteral: 6000000),
             AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel as String,
         ]
-        encoder.videoOutputConfiguration = [
+        exporter.videoOutputConfiguration = [
             AVVideoCodecKey: AVVideoCodecH264,
             AVVideoWidthKey: NSNumber(integerLiteral: 1920),
             AVVideoHeightKey: NSNumber(integerLiteral: 1080),
             AVVideoScalingModeKey: AVVideoScalingModeResizeAspectFill,
             AVVideoCompressionPropertiesKey: compressionDict
         ]
-        encoder.audioOutputConfiguration = [
+        exporter.audioOutputConfiguration = [
             AVFormatIDKey: kAudioFormatMPEG4AAC,
             AVEncoderBitRateKey: NSNumber(integerLiteral: 128000),
             AVNumberOfChannelsKey: NSNumber(integerLiteral: 2),
@@ -62,11 +64,13 @@ class ViewController: UIViewController {
         ]
         
         do {
-            try encoder.export(withCompletionHandler: { () in
-                switch encoder.status {
+            try exporter.export(progressHandler: { (progress) in
+                print(progress)
+            }, completionHandler: { (status) in
+                switch status {
                 case .completed:
-                    print("NextLevelSessionExporter, export completed, \(encoder.outputURL?.description ?? "")")
-                    self.saveVideo(withURL: encoder.outputURL!)
+                    print("NextLevelSessionExporter, export completed, \(exporter.outputURL?.description ?? "")")
+                    self.saveVideo(withURL: exporter.outputURL!)
                     break
                 case .cancelled:
                     print("NextLevelSessionExporter, export cancelled")
@@ -133,15 +137,3 @@ class ViewController: UIViewController {
     }
     
 }
-
-// MARK: - NextLevelSessionExporterDelegate
-
-extension ViewController: NextLevelSessionExporterDelegate {
-    func sessionExporter(_ sessionExporter: NextLevelSessionExporter, didUpdateProgress progress: Float) {
-        print("progress: \(progress)")
-    }
-    
-    func sessionExporter(_ sessionExporter: NextLevelSessionExporter, didRenderFrame renderFrame: CVPixelBuffer, withPresentationTime presentationTime: CMTime, toRenderBuffer renderBuffer: CVPixelBuffer) {
-    }
-}
-
