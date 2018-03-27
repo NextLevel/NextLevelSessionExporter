@@ -76,7 +76,7 @@ public class NextLevelSessionExporter: NSObject {
     public var outputURL: URL?
     
     /// Output file type. UTI string defined in `AVMediaFormat.h`.
-    public var outputFileType: String?
+    public var outputFileType: AVFileType? = AVFileType.mp4
     
     /// Time range or limit of an export from `kCMTimeZero` to `kCMTimePositiveInfinity`
     public var timeRange: CMTimeRange
@@ -200,7 +200,7 @@ extension NextLevelSessionExporter {
             }
             
             do {
-                self._writer = try AVAssetWriter(outputURL: outputURL, fileType: AVFileType(rawValue: outputFileType))
+                self._writer = try AVAssetWriter(outputURL: outputURL, fileType: outputFileType)
             } catch {
                 print("NextLevelSessionExporter, could not setup a reader for the provided asset \(asset)")
                 return
