@@ -82,10 +82,10 @@ public class NextLevelSessionExporter: NSObject {
     public var timeRange: CMTimeRange
     
     /// Indicates if an export session should expect media data in real time.
-    public var expectsMediaDataInRealTime: Bool
+    public var expectsMediaDataInRealTime: Bool = false
     
     /// Indicates if an export should be optimized for network use.
-    public var optimizeForNetworkUse: Bool
+    public var optimizeForNetworkUse: Bool = false
     
     /// Metadata to be added to an export.
     public var metadata: [AVMetadataItem]?
@@ -140,11 +140,11 @@ public class NextLevelSessionExporter: NSObject {
     internal var _videoInput: AVAssetWriterInput?
     internal var _audioInput: AVAssetWriterInput?
     
-    internal var _progress: Float
+    internal var _progress: Float = 0
     internal var _completionHandler: (() -> Void)?
     
-    internal var _duration: TimeInterval
-    internal var _lastSamplePresentationTime: CMTime
+    internal var _duration: TimeInterval = 0
+    internal var _lastSamplePresentationTime: CMTime = kCMTimeInvalid
     
     // MARK: - object lifecycle
     
@@ -157,13 +157,7 @@ public class NextLevelSessionExporter: NSObject {
     }
     
     override init() {
-        self.outputFileType = AVFileType.mp4.rawValue
         self.timeRange = CMTimeRange(start: kCMTimeZero, end: kCMTimePositiveInfinity)
-        self.expectsMediaDataInRealTime = false
-        self.optimizeForNetworkUse = false
-        self._progress = 0
-        self._duration = 0
-        self._lastSamplePresentationTime = kCMTimeInvalid
         super.init()
     }
     
