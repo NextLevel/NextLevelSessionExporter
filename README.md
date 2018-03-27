@@ -36,7 +36,7 @@ Alternatively, drop the [source files](https://github.com/NextLevel/NextLevelSes
 
 ## Example
 
-You can simply use the `AVAsset` extension or create and use an instance of `NextLevelSessionExporter` directly.
+Simply use the `AVAsset` extension or create and use an instance of `NextLevelSessionExporter` directly.
 
 ```Swift
 let tmpURL = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
@@ -66,7 +66,7 @@ let asset = AVAsset(url: Bundle.main.url(forResource: "TestVideo", withExtension
 asset.nextlevel_export.nextlevel_export(outputURL: tmpURL, videoOutputConfiguration: videoOutputConfig, audioOutputConfiguration: audioOutputConfig)
 ```
 
-Alternatively, using `NextLevelSessionExporter` directly.
+Alternatively, you can use `NextLevelSessionExporter` directly.
 
 ``` Swift
 let exporter = NextLevelSessionExporter(withAsset: asset)
@@ -95,8 +95,8 @@ exporter.audioOutputConfiguration = [
 ]
 
 do {
-    try exporter.export(completionHandler: { () in                
-        switch encoder.status {
+    try exporter.export(completionHandler: { (status) in                
+        switch status {
         case .completed:
             print("video export completed")
             break
