@@ -83,7 +83,7 @@ public class NextLevelSessionExporter: NSObject {
     /// Video output configuration dictionary, using keys defined in `<AVFoundation/AVVideoSettings.h>`
     public var videoOutputConfiguration: [String : Any]?
     
-    /// Audio output configuration dictionary, using keys defined in `<CoreVideo/CVPixelBuffer.h>`
+    /// Audio output configuration dictionary, using keys defined in `<AVFoundation/AVAudioSettings.h>`
     public var audioOutputConfiguration: [String : Any]?
     
     /// Export session status state.
