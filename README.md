@@ -112,6 +112,10 @@ do {
 }
 ```
 
+## Documentation
+
+You can find [the docs here](https://nextlevel.github.io/NextLevelSessionExporter). Documentation is generated with [jazzy](https://github.com/realm/jazzy) and hosted on [GitHub-Pages](https://pages.github.com).
+
 ## Community
 
 - Found a bug? Open an [issue](https://github.com/NextLevel/NextLevelSessionExporter/issues).
