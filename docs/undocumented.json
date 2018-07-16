@@ -1,0 +1,12 @@
+{
+  "warnings": [
+    {
+      "file": "/Users/piemonte/Source/NextLevelSessionExporter/Sources/NextLevelSessionExporter.swift",
+      "line": 34,
+      "symbol": "NextLevelSessionExporterError.setupFailure",
+      "symbol_kind": "source.lang.swift.decl.enumelement",
+      "warning": "undocumented"
+    }
+  ],
+  "source_directory": "/Users/piemonte/Source/NextLevelSessionExporter"
+}

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>SessionExporter  Reference</title>
+    <link rel="stylesheet" type="text/css" href="css/jazzy.css" />
+    <link rel="stylesheet" type="text/css" href="css/highlight.css" />
+    <meta charset='utf-8'>
+    <script src="js/jquery.min.js" defer></script>
+    <script src="js/jazzy.js" defer></script>
+    
+  </head>
+  <body>
+    <a title="SessionExporter  Reference"></a>
+    <header>
+      <div class="content-wrapper">
+        <p><a href="index.html">SessionExporter Docs</a> (96% documented)</p>
+        <p class="header-right"><a href="https://github.com/NextLevel/NextLevelSessionExporter"><img src="img/gh.png"/>View on GitHub</a></p>
+      </div>
+    </header>
+    <div class="content-wrapper">
+      <p id="breadcrumbs">
+        <a href="index.html">SessionExporter Reference</a>
+        <img id="carat" src="img/carat.png" />
+        SessionExporter  Reference
+      </p>
+    </div>
+    <div class="content-wrapper">
+      <nav class="sidebar">
+        <ul class="nav-groups">
+          <li class="nav-group-name">
+            <a href="Classes.html">Classes</a>
+            <ul class="nav-group-tasks">
+              <li class="nav-group-task">
+                <a href="Classes/NextLevelSessionExporter.html">NextLevelSessionExporter</a>
+              </li>
+            </ul>
+          </li>
+          <li class="nav-group-name">
+            <a href="Global Variables.html">Global Variables</a>
+            <ul class="nav-group-tasks">
+              <li class="nav-group-task">
+                <a href="Global Variables.html#/s:15SessionExporter09NextLevelaB11ErrorDomainSSvp">NextLevelSessionExporterErrorDomain</a>
+              </li>
+            </ul>
+          </li>
+          <li class="nav-group-name">
+            <a href="Enums.html">Enumerations</a>
+            <ul class="nav-group-tasks">
+              <li class="nav-group-task">
+                <a href="Enums/NextLevelSessionExporterError.html">NextLevelSessionExporterError</a>
+              </li>
+            </ul>
+          </li>
+          <li class="nav-group-name">
+            <a href="Extensions.html">Extensions</a>
+            <ul class="nav-group-tasks">
+              <li class="nav-group-task">
+                <a href="Extensions/AVAsset.html">AVAsset</a>
+              </li>
+            </ul>
+          </li>
+        </ul>
+      </nav>
+      <article class="main-content">
+        <section>
+          <section class="section">
+            
+            <h2 id='nextlevelsessionexporter' class='heading'>NextLevelSessionExporter 🔄</h2>
+
+<p><code><a href="Classes/NextLevelSessionExporter.html">NextLevelSessionExporter</a></code> is an export and transcode media library for iOS written in <a href="https://developer.apple.com/swift/">Swift</a>.</p>
+
+<p><a href="https://travis-ci.org/NextLevel/NextLevelSessionExporter"><img src="https://travis-ci.org/NextLevel/NextLevelSessionExporter.svg?branch=master" alt="Build Status"></a> <a href="http://cocoadocs.org/docsets/NextLevelSessionExporter/"><img src="https://img.shields.io/cocoapods/v/NextLevelSessionExporter.svg?style=flat" alt="Pod Version"></a> <a href="https://developer.apple.com/swift"><img src="https://img.shields.io/badge/language-swift%204.0-brightgreen.svg" alt="Swift Version"></a> <a href="https://github.com/NextLevel/NextLevelSessionExporter/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-MIT-lightgrey.svg" alt="GitHub license"></a></p>
+
+<p>The library provides customizable audio and video encoding options unlike <code>AVAssetExportSession</code> and without having to learn the intricacies of AVFoundation. It was a port of <a href="https://github.com/rs/SDAVAssetExportSession">SDAVAssetExportSession</a> with inspiration from <a href="https://github.com/rFlex/SCRecorder/blob/master/Library/Sources/SCAssetExportSession.h">SCAssetExportSession</a> – which are great obj-c alternatives.</p>
+
+<ul>
+<li>Looking for a capture library? Check out <a href="https://github.com/NextLevel/NextLevel">NextLevel</a>.</li>
+<li>Looking for a video player? Check out <a href="https://github.com/piemonte/player">Player</a></li>
+</ul>
+<h2 id='quick-start' class='heading'>Quick Start</h2>
+<pre class="highlight ruby"><code>
+<span class="c1"># CocoaPods</span>
+
+<span class="n">pod</span> <span class="s2">"NextLevelSessionExporter"</span><span class="p">,</span> <span class="s2">"~&gt; 0.1.0"</span>
+
+<span class="c1"># Carthage</span>
+
+<span class="n">github</span> <span class="s2">"nextlevel/NextLevelSessionExporter"</span> <span class="o">~&gt;</span> <span class="mf">0.1</span><span class="o">.</span><span class="mi">0</span>
+
+<span class="c1"># Swift PM</span>
+
+<span class="n">let</span> <span class="n">package</span> <span class="o">=</span> <span class="no">Package</span><span class="p">(</span>
+    <span class="ss">dependencies: </span><span class="p">[</span>
+        <span class="o">.</span><span class="no">Package</span><span class="p">(</span><span class="ss">url: </span><span class="s2">"https://github.com/nextlevel/NextLevelSessionExporter"</span><span class="p">,</span> <span class="ss">majorVersion: </span><span class="mi">0</span><span class="p">)</span>
+    <span class="p">]</span>
+<span class="p">)</span>
+
+</code></pre>
+
+<p>Alternatively, drop the <a href="https://github.com/NextLevel/NextLevelSessionExporter/tree/master/Sources">source files</a> into your Xcode project.</p>
+<h2 id='example' class='heading'>Example</h2>
+
+<p>Simply use the <code>AVAsset</code> extension or create and use an instance of <code><a href="Classes/NextLevelSessionExporter.html">NextLevelSessionExporter</a></code> directly.</p>
+<pre class="highlight plaintext"><code>let tmpURL = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+    .appendingPathComponent(ProcessInfo().globallyUniqueString)
+    .appendingPathExtension("mp4")
+exporter.outputURL = tmpURL
+
+let compressionDict: [String: Any] = [
+    AVVideoAverageBitRateKey: NSNumber(integerLiteral: 6000000),
+    AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel as String,
+]
+let videoOutputConfig = [
+    AVVideoCodecKey: AVVideoCodec.h264,
+    AVVideoWidthKey: NSNumber(integerLiteral: 1920),
+    AVVideoHeightKey: NSNumber(integerLiteral: 1080),
+    AVVideoScalingModeKey: AVVideoScalingModeResizeAspectFill,
+    AVVideoCompressionPropertiesKey: compressionDict
+]
+let audioOutputConfig = [
+    AVFormatIDKey: kAudioFormatMPEG4AAC,
+    AVEncoderBitRateKey: NSNumber(integerLiteral: 128000),
+    AVNumberOfChannelsKey: NSNumber(integerLiteral: 2),
+    AVSampleRateKey: NSNumber(value: Float(44100))
+]
+
+let asset = AVAsset(url: Bundle.main.url(forResource: "TestVideo", withExtension: "mov")!)
+asset.nextlevel_export.nextlevel_export(outputURL: tmpURL, videoOutputConfiguration: videoOutputConfig, audioOutputConfiguration: audioOutputConfig)
+</code></pre>
+
+<p>Alternatively, you can use <code><a href="Classes/NextLevelSessionExporter.html">NextLevelSessionExporter</a></code> directly.</p>
+<pre class="highlight plaintext"><code>let exporter = NextLevelSessionExporter(withAsset: asset)
+exporter.outputFileType = AVFileType.mp4
+let tmpURL = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+    .appendingPathComponent(ProcessInfo().globallyUniqueString)
+    .appendingPathExtension("mp4")
+exporter.outputURL = tmpURL
+
+let compressionDict: [String: Any] = [
+    AVVideoAverageBitRateKey: NSNumber(integerLiteral: 6000000),
+    AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel as String,
+]
+exporter.videoOutputConfiguration = [
+    AVVideoCodecKey: AVVideoCodec.h264,
+    AVVideoWidthKey: NSNumber(integerLiteral: 1920),
+    AVVideoHeightKey: NSNumber(integerLiteral: 1080),
+    AVVideoScalingModeKey: AVVideoScalingModeResizeAspectFill,
+    AVVideoCompressionPropertiesKey: compressionDict
+]
+exporter.audioOutputConfiguration = [
+    AVFormatIDKey: kAudioFormatMPEG4AAC,
+    AVEncoderBitRateKey: NSNumber(integerLiteral: 128000),
+    AVNumberOfChannelsKey: NSNumber(integerLiteral: 2),
+    AVSampleRateKey: NSNumber(value: Float(44100))
+]
+
+do {
+    try exporter.export(completionHandler: { (status) in                
+        switch status {
+        case .completed:
+            print("video export completed")
+            break
+        case .cancelled:
+            print("video export cancelled")
+            break
+        default:
+            break
+        }
+    })
+} catch {
+    print("failed to export")
+}
+</code></pre>
+<h2 id='community' class='heading'>Community</h2>
+
+<ul>
+<li>Found a bug? Open an <a href="https://github.com/NextLevel/NextLevelSessionExporter/issues">issue</a>.</li>
+<li>Feature idea? Open an <a href="https://github.com/NextLevel/NextLevelSessionExporter/issues">issue</a>.</li>
+<li>Want to contribute? Submit a <a href="https://github.com/NextLevel/NextLevelSessionExporter/pulls">pull request</a>.</li>
+</ul>
+<h2 id='resources' class='heading'>Resources</h2>
+
+<ul>
+<li><a href="https://developer.apple.com/library/ios/documentation/AudioVideo/Conceptual/AVFoundationPG/Articles/00_Introduction.html">AV Foundation Programming Guide</a></li>
+<li><a href="https://developer.apple.com/library/ios/documentation/AVFoundation/Reference/AVFoundationFramework/">AV Foundation Framework Reference</a></li>
+<li><a href="https://github.com/NextLevel/NextLevel">NextLevel</a>, Rad Media Capture in Swift</li>
+<li><a href="https://github.com/BradLarson/GPUImage2">GPUImage2</a>, image processing library in Swift</li>
+<li><a href="https://github.com/rs/SDAVAssetExportSession">SDAVAssetExportSession</a>, media transcoding library in obj-c</li>
+</ul>
+<h2 id='license' class='heading'>License</h2>
+
+<p><code><a href="Classes/NextLevelSessionExporter.html">NextLevelSessionExporter</a></code> is available under the MIT license, see the <a href="https://github.com/NextLevel/NextLevelSessionExporter/blob/master/LICENSE">LICENSE</a> file for more information.</p>
+
+          </section>
+        </section>
+        <section id="footer">
+          <p>&copy; 2018 <a class="link" href="http://nextlevel.engineering" target="_blank" rel="external">Patrick Piemonte</a>. All rights reserved. (Last updated: 2018-07-15)</p>
+          <p>Generated by <a class="link" href="https://github.com/realm/jazzy" target="_blank" rel="external">jazzy ♪♫ v0.9.3</a>, a <a class="link" href="https://realm.io" target="_blank" rel="external">Realm</a> project.</p>
+        </section>
+      </article>
+    </div>
+  </body>
+</div>
+</html>
