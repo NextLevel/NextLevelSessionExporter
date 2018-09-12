@@ -3,12 +3,16 @@
 
 `NextLevelSessionExporter` is an export and transcode media library for iOS written in [Swift](https://developer.apple.com/swift/).
 
-[![Build Status](https://travis-ci.org/NextLevel/NextLevelSessionExporter.svg?branch=master)](https://travis-ci.org/NextLevel/NextLevelSessionExporter) [![Pod Version](https://img.shields.io/cocoapods/v/NextLevelSessionExporter.svg?style=flat)](http://cocoadocs.org/docsets/NextLevelSessionExporter/) [![Swift Version](https://img.shields.io/badge/language-swift%204.0-brightgreen.svg)](https://developer.apple.com/swift) [![GitHub license](https://img.shields.io/badge/license-MIT-lightgrey.svg)](https://github.com/NextLevel/NextLevelSessionExporter/blob/master/LICENSE)
+[![Build Status](https://travis-ci.org/NextLevel/NextLevelSessionExporter.svg?branch=master)](https://travis-ci.org/NextLevel/NextLevelSessionExporter) [![Pod Version](https://img.shields.io/cocoapods/v/NextLevelSessionExporter.svg?style=flat)](http://cocoadocs.org/docsets/NextLevelSessionExporter/) [![Swift Version](https://img.shields.io/badge/language-swift%204.2-brightgreen.svg)](https://developer.apple.com/swift) [![GitHub license](https://img.shields.io/badge/license-MIT-lightgrey.svg)](https://github.com/NextLevel/NextLevelSessionExporter/blob/master/LICENSE)
 
 The library provides customizable audio and video encoding options unlike `AVAssetExportSession` and without having to learn the intricacies of AVFoundation. It was a port of [SDAVAssetExportSession](https://github.com/rs/SDAVAssetExportSession) with inspiration from [SCAssetExportSession](https://github.com/rFlex/SCRecorder/blob/master/Library/Sources/SCAssetExportSession.h) – which are great obj-c alternatives.
 
 - Looking for a capture library? Check out [NextLevel](https://github.com/NextLevel/NextLevel).
 - Looking for a video player? Check out [Player](https://github.com/piemonte/player)
+
+Need a different version of Swift?
+* `4.2` - Target your Podfile to the latest release or master
+* `4.0` - Target your Podfile to the `swift4.0` branch
 
 ## Quick Start
 
@@ -16,11 +20,11 @@ The library provides customizable audio and video encoding options unlike `AVAss
 
 # CocoaPods
 
-pod "NextLevelSessionExporter", "~> 0.1.0"
+pod "NextLevelSessionExporter", "~> 0.2.0"
 
 # Carthage
 
-github "nextlevel/NextLevelSessionExporter" ~> 0.1.0
+github "nextlevel/NextLevelSessionExporter" ~> 0.2.0
 
 # Swift PM
 

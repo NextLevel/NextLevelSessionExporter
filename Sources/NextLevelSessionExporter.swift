@@ -87,7 +87,7 @@ public class NextLevelSessionExporter: NSObject {
     public var audioOutputConfiguration: [String : Any]?
     
     /// Export session status state.
-    public var status: AVAssetExportSessionStatus {
+    public var status: AVAssetExportSession.Status {
         get {
             if let writer = self._writer {
                 switch writer.status {
@@ -134,7 +134,7 @@ public class NextLevelSessionExporter: NSObject {
     internal var _completionHandler: CompletionHandler?
     
     internal var _duration: TimeInterval = 0
-    internal var _lastSamplePresentationTime: CMTime = kCMTimeInvalid
+    internal var _lastSamplePresentationTime: CMTime = CMTime.invalid
     
     // MARK: - object lifecycle
     
@@ -147,7 +147,7 @@ public class NextLevelSessionExporter: NSObject {
     }
     
     override init() {
-        self.timeRange = CMTimeRange(start: kCMTimeZero, end: kCMTimePositiveInfinity)
+        self.timeRange = CMTimeRange(start: CMTime.zero, end: CMTime.positiveInfinity)
         super.init()
     }
     
@@ -168,7 +168,7 @@ public class NextLevelSessionExporter: NSObject {
 extension NextLevelSessionExporter {
     
     /// Completion handler type for when an export finishes.
-    public typealias CompletionHandler = (_ status: AVAssetExportSessionStatus) -> Void
+    public typealias CompletionHandler = (_ status: AVAssetExportSession.Status) -> Void
     
     /// Progress handler type
     public typealias ProgressHandler = (_ progress: Float) -> Void
@@ -465,7 +465,7 @@ extension NextLevelSessionExporter {
             if frameRate == 0 {
                 frameRate = 30
             }
-            videoComposition.frameDuration = CMTimeMake(1, Int32(frameRate))
+            videoComposition.frameDuration = CMTimeMake(value: 1, timescale: Int32(frameRate))
             
             // determine the appropriate size and transform
             
@@ -517,10 +517,10 @@ extension NextLevelSessionExporter {
                 // make the composition
                 
                 let compositionInstruction = AVMutableVideoCompositionInstruction()
-                compositionInstruction.timeRange = CMTimeRange(start: kCMTimeZero, duration: asset.duration)
+                compositionInstruction.timeRange = CMTimeRange(start: CMTime.zero, duration: asset.duration)
                 
                 let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: videoTrack)
-                layerInstruction.setTransform(transform, at: kCMTimeZero)
+                layerInstruction.setTransform(transform, at: CMTime.zero)
                 
                 compositionInstruction.layerInstructions = [layerInstruction]
                 videoComposition.instructions = [compositionInstruction]
