@@ -25,7 +25,7 @@
 		065458591D7907F00075ADFB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		065458601D7908FE0075ADFB /* NextLevelSessionExporter.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = NextLevelSessionExporter.swift; path = ../../Sources/NextLevelSessionExporter.swift; sourceTree = "<group>"; };
 		06FC751821D8AE2000B84E10 /* NextLevelSessionExporter.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = NextLevelSessionExporter.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		06FC751A21D8AE2000B84E10 /* NextLevelSessionExporter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NextLevelSessionExporter.h; sourceTree = "<group>"; };
+		06FC751A21D8AE2000B84E10 /* NextLevelSessionExporter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = NextLevelSessionExporter.h; path = ../../Sources/NextLevelSessionExporter.h; sourceTree = "<group>"; };
 		06FC751B21D8AE2000B84E10 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
