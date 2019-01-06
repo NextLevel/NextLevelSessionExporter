@@ -132,7 +132,7 @@ public class NextLevelSessionExporter: NSObject {
     
     /// Initializes a session with an asset to export.
     
-    init(withAsset asset: AVAsset) {
+    public init(withAsset asset: AVAsset) {
         self.asset = asset
         timeRange = CMTimeRange(start: .zero, end: .positiveInfinity)
         super.init()
