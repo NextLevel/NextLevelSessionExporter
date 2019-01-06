@@ -231,78 +231,85 @@ extension NextLevelSessionExporter {
             }
         }
         
-        // video output
+        setupVideoOutput(asset)
+        setupAudioOutput(asset)
+        setupAudioInput()
         
-        if let videoTracks = self.asset?.tracks(withMediaType: AVMediaType.video) {
-            if videoTracks.count > 0 {
-                _videoOutput = AVAssetReaderVideoCompositionOutput(videoTracks: videoTracks, videoSettings: videoInputConfiguration)
-                _videoOutput?.alwaysCopiesSampleData = false
-                
-                if let videoComposition = videoComposition {
-                    _videoOutput?.videoComposition = videoComposition
-                } else {
-                    _videoOutput?.videoComposition = createVideoComposition()
-                }
-                
-                if let videoOutput = _videoOutput,
-                    let reader = _reader {
-                    if reader.canAdd(videoOutput) {
-                        reader.add(videoOutput)
-                    }
-                }
-                
-                // video input
-                if _writer?.canApply(outputSettings: videoOutputConfiguration, forMediaType: AVMediaType.video) == true {
-                    _videoInput = AVAssetWriterInput(mediaType: AVMediaType.video, outputSettings: videoOutputConfiguration)
-                    _videoInput?.expectsMediaDataInRealTime = expectsMediaDataInRealTime
-                } else {
-                    fatalError("Unsupported output configuration")
-                }
-                
-                if let writer = _writer,
-                    let videoInput = _videoInput {
-                    if writer.canAdd(videoInput) {
-                        writer.add(videoInput)
-                    }
-                    
-                    // setup pixelbuffer adaptor
-                    
-                    var pixelBufferAttrib: [String : Any] = [:]
-                    pixelBufferAttrib[kCVPixelBufferPixelFormatTypeKey as String] = NSNumber(value: Int(kCVPixelFormatType_32RGBA))
-                    if let videoComposition = _videoOutput?.videoComposition {
-                        pixelBufferAttrib[kCVPixelBufferWidthKey as String] = NSNumber(value: Int(videoComposition.renderSize.width))
-                        pixelBufferAttrib[kCVPixelBufferHeightKey as String] = NSNumber(value: Int(videoComposition.renderSize.height))
-                    }
-                    pixelBufferAttrib["IOSurfaceOpenGLESTextureCompatibility"] = NSNumber(value:  true)
-                    pixelBufferAttrib["IOSurfaceOpenGLESFBOCompatibility"] = NSNumber(value: true)
-                    
-                    _pixelBufferAdaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: videoInput, sourcePixelBufferAttributes: pixelBufferAttrib)
-                }
+        // export
+        export(asset)
+    }
+    
+    private func setupVideoOutput(_ asset: AVAsset) {
+        let videoTracks = asset.tracks(withMediaType: .video)
+        guard videoTracks.count > 0 else {
+            _videoOutput = nil
+            return
+        }
+        _videoOutput = AVAssetReaderVideoCompositionOutput(videoTracks: videoTracks, videoSettings: videoInputConfiguration)
+        _videoOutput?.alwaysCopiesSampleData = false
+        
+        if let videoComposition = videoComposition {
+            _videoOutput?.videoComposition = videoComposition
+        } else {
+            _videoOutput?.videoComposition = createVideoComposition()
+        }
+        
+        if let videoOutput = _videoOutput,
+            let reader = _reader {
+            if reader.canAdd(videoOutput) {
+                reader.add(videoOutput)
             }
         }
         
-        // audio output
-        
-        if let audioTracks = self.asset?.tracks(withMediaType: AVMediaType.audio) {
-            if audioTracks.count > 0 {
-                _audioOutput = AVAssetReaderAudioMixOutput(audioTracks: audioTracks, audioSettings: nil)
-                _audioOutput?.alwaysCopiesSampleData = false
-                _audioOutput?.audioMix = audioMix
-                if let reader = _reader,
-                    let audioOutput = _audioOutput {
-                    if reader.canAdd(audioOutput) {
-                        reader.add(audioOutput)
-                    }
-                }
-            } else {
-                _audioOutput = nil
-            }
+        // video input
+        if _writer?.canApply(outputSettings: videoOutputConfiguration, forMediaType: AVMediaType.video) == true {
+            _videoInput = AVAssetWriterInput(mediaType: AVMediaType.video, outputSettings: videoOutputConfiguration)
+            _videoInput?.expectsMediaDataInRealTime = expectsMediaDataInRealTime
+        } else {
+            fatalError("Unsupported output configuration")
         }
         
-        // audio input
-        
+        if let writer = _writer,
+            let videoInput = _videoInput {
+            if writer.canAdd(videoInput) {
+                writer.add(videoInput)
+            }
+            
+            // setup pixelbuffer adaptor
+            
+            var pixelBufferAttrib: [String : Any] = [:]
+            pixelBufferAttrib[kCVPixelBufferPixelFormatTypeKey as String] = NSNumber(value: Int(kCVPixelFormatType_32RGBA))
+            if let videoComposition = _videoOutput?.videoComposition {
+                pixelBufferAttrib[kCVPixelBufferWidthKey as String] = NSNumber(value: Int(videoComposition.renderSize.width))
+                pixelBufferAttrib[kCVPixelBufferHeightKey as String] = NSNumber(value: Int(videoComposition.renderSize.height))
+            }
+            pixelBufferAttrib["IOSurfaceOpenGLESTextureCompatibility"] = NSNumber(value:  true)
+            pixelBufferAttrib["IOSurfaceOpenGLESFBOCompatibility"] = NSNumber(value: true)
+            
+            _pixelBufferAdaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: videoInput, sourcePixelBufferAttributes: pixelBufferAttrib)
+        }
+    }
+    
+    private func setupAudioOutput(_ asset: AVAsset) {
+        let audioTracks = asset.tracks(withMediaType: .audio)
+        guard audioTracks.count > 0 else {
+            _audioOutput = nil
+            return
+        }
+        _audioOutput = AVAssetReaderAudioMixOutput(audioTracks: audioTracks, audioSettings: nil)
+        _audioOutput?.alwaysCopiesSampleData = false
+        _audioOutput?.audioMix = audioMix
+        if let reader = _reader,
+            let audioOutput = _audioOutput {
+            if reader.canAdd(audioOutput) {
+                reader.add(audioOutput)
+            }
+        }
+    }
+    
+    private func setupAudioInput() {
         if _audioOutput != nil {
-            _audioInput = AVAssetWriterInput(mediaType: AVMediaType.audio, outputSettings: audioOutputConfiguration)
+            _audioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: audioOutputConfiguration)
             _audioInput?.expectsMediaDataInRealTime = expectsMediaDataInRealTime
             if let writer = _writer,
                 let audioInput = _audioInput {
@@ -311,9 +318,9 @@ extension NextLevelSessionExporter {
                 }
             }
         }
-        
-        // export
-        
+    }
+    
+    private func export(_ asset: AVAsset) {
         _writer?.startWriting()
         _reader?.startReading()
         _writer?.startSession(atSourceTime: timeRange.start)
@@ -321,44 +328,43 @@ extension NextLevelSessionExporter {
         let audioSemaphore = DispatchSemaphore(value: 0)
         let videoSemaphore = DispatchSemaphore(value: 0)
         
-        _inputQueue = DispatchQueue(label: NextLevelSessionExporterInputQueue, autoreleaseFrequency: .workItem, target: DispatchQueue.global())
-        if let inputQueue = _inputQueue {
-            
-            if let videoTracks = self.asset?.tracks(withMediaType: AVMediaType.video),
-                let videoInput = _videoInput,
-                let videoOutput = _videoOutput {
-                if videoTracks.count > 0 {
-                    videoInput.requestMediaDataWhenReady(on: inputQueue, using: {
-                        if self.encode(readySamplesFromReaderOutput: videoOutput, toWriterInput: videoInput) == false {
-                            videoSemaphore.signal()
-                        }
-                    })
-                } else {
-                    videoSemaphore.signal()
-                }
-            } else {
-                videoSemaphore.signal()
-            }
-            
-            if let audioInput = _audioInput,
-                let audioOutput = _audioOutput {
-                audioInput.requestMediaDataWhenReady(on: inputQueue, using: {
-                    if self.encode(readySamplesFromReaderOutput: audioOutput, toWriterInput: audioInput) == false {
-                        audioSemaphore.signal()
+        _inputQueue = DispatchQueue(label: NextLevelSessionExporterInputQueue, autoreleaseFrequency: .workItem, target: .global())
+        guard let inputQueue = _inputQueue else {
+            fatalError("\(#function) _inputQueue is nil")
+        }
+        let videoTracks = asset.tracks(withMediaType: .video)
+        if let videoInput = _videoInput,
+            let videoOutput = _videoOutput {
+            if videoTracks.count > 0 {
+                videoInput.requestMediaDataWhenReady(on: inputQueue, using: {
+                    if self.encode(readySamplesFromReaderOutput: videoOutput, toWriterInput: videoInput) == false {
+                        videoSemaphore.signal()
                     }
                 })
             } else {
-                audioSemaphore.signal()
+                videoSemaphore.signal()
             }
-            
-            DispatchQueue.global().async {
-                audioSemaphore.wait()
-                videoSemaphore.wait()
-                DispatchQueue.main.sync {
-                    self.finish()
+        } else {
+            videoSemaphore.signal()
+        }
+        
+        if let audioInput = _audioInput,
+            let audioOutput = _audioOutput {
+            audioInput.requestMediaDataWhenReady(on: inputQueue, using: {
+                if self.encode(readySamplesFromReaderOutput: audioOutput, toWriterInput: audioInput) == false {
+                    audioSemaphore.signal()
                 }
+            })
+        } else {
+            audioSemaphore.signal()
+        }
+        
+        DispatchQueue.global().async {
+            audioSemaphore.wait()
+            videoSemaphore.wait()
+            DispatchQueue.main.sync {
+                self.finish()
             }
-            
         }
     }
     
@@ -619,7 +625,7 @@ extension AVAsset {
     ///   - audioOutputConfiguration: audio output configuration
     ///   - progressHandler: progress fraction handler
     ///   - completionHandler: completion handler
-    public func nextlevel_export(outputFileType: AVFileType? = AVFileType.mp4,
+    public func nextlevel_export(outputFileType: AVFileType? = .mp4,
                                  outputURL: URL,
                                  metadata: [AVMetadataItem]? = nil,
                                  videoInputConfiguration: [String : Any]? = nil,
