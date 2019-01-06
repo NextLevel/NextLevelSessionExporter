@@ -26,9 +26,6 @@ import AVFoundation
 
 // MARK: - types
 
-/// Session export error domain.
-public let NextLevelSessionExporterErrorDomain = "NextLevelSessionExporterErrorDomain"
-
 /// Session export errors.
 public enum NextLevelSessionExporterError: Error, CustomStringConvertible {
     case setupFailure
@@ -50,7 +47,7 @@ private let NextLevelSessionExporterInputQueue = "NextLevelSessionExporterInputQ
 public class NextLevelSessionExporter: NSObject {
     
     /// Input asset for export, provided when initialized.
-    public var asset: AVAsset?
+    public let asset: AVAsset
     
     /// Enables video composition and parameters for the session.
     public var videoComposition: AVVideoComposition?
@@ -68,10 +65,10 @@ public class NextLevelSessionExporter: NSObject {
     public var timeRange: CMTimeRange
     
     /// Indicates if an export session should expect media data in real time.
-    public var expectsMediaDataInRealTime: Bool = false
+    public var expectsMediaDataInRealTime = false
     
     /// Indicates if an export should be optimized for network use.
-    public var optimizeForNetworkUse: Bool = false
+    public var optimizeForNetworkUse = false
     
     /// Metadata to be added to an export.
     public var metadata: [AVMetadataItem]?
@@ -115,7 +112,7 @@ public class NextLevelSessionExporter: NSObject {
     internal var _reader: AVAssetReader!
     internal var _pixelBufferAdaptor: AVAssetWriterInputPixelBufferAdaptor?
     
-    internal var _inputQueue: DispatchQueue?
+    internal let _inputQueue = DispatchQueue(label: NextLevelSessionExporterInputQueue, autoreleaseFrequency: .workItem, target: .global())
     
     internal var _videoOutput: AVAssetReaderVideoCompositionOutput?
     internal var _audioOutput: AVAssetReaderAudioMixOutput?
@@ -129,33 +126,18 @@ public class NextLevelSessionExporter: NSObject {
     internal var _completionHandler: CompletionHandler?
     
     internal var _duration: TimeInterval = 0
-    internal var _lastSamplePresentationTime: CMTime = CMTime.invalid
+    internal var _lastSamplePresentationTime = CMTime.invalid
     
     // MARK: - object lifecycle
     
     /// Initializes a session with an asset to export.
-    ///
-    /// - Parameter asset: The asset to export.
-    public convenience init(withAsset asset: AVAsset) {
-        self.init()
-        self.asset = asset
-    }
     
-    override init() {
-        timeRange = CMTimeRange(start: CMTime.zero, end: CMTime.positiveInfinity)
+    init(withAsset asset: AVAsset) {
+        self.asset = asset
+        timeRange = CMTimeRange(start: .zero, end: .positiveInfinity)
         super.init()
     }
     
-    deinit {
-        _writer = nil
-        _reader = nil
-        _pixelBufferAdaptor = nil
-        _inputQueue = nil
-        _videoOutput = nil
-        _audioOutput = nil
-        _videoInput = nil
-        _audioInput = nil
-    }
 }
 
 // MARK: - export
@@ -163,7 +145,7 @@ public class NextLevelSessionExporter: NSObject {
 extension NextLevelSessionExporter {
     
     /// Completion handler type for when an export finishes.
-    public typealias CompletionHandler = (_ status: AVAssetExportSession.Status) -> Void
+    public typealias CompletionHandler = (_ status: AVAssetExportSession.Status, _ error: Error?) -> Void
     
     /// Progress handler type
     public typealias ProgressHandler = (_ progress: Float) -> Void
@@ -182,10 +164,8 @@ extension NextLevelSessionExporter {
         _renderHandler = renderHandler
         _completionHandler = completionHandler
         
-        guard let outputURL = outputURL,
-            let outputFileType = outputFileType,
-            let asset = asset else {
-                throw NextLevelSessionExporterError.setupFailure
+        guard let outputURL = outputURL, let outputFileType = outputFileType else {
+            throw NextLevelSessionExporterError.setupFailure
         }
         
         do {
@@ -254,23 +234,19 @@ extension NextLevelSessionExporter {
             _videoOutput?.videoComposition = createVideoComposition()
         }
         
-        if let videoOutput = _videoOutput,
-            let reader = _reader {
-            if reader.canAdd(videoOutput) {
-                reader.add(videoOutput)
-            }
+        if let videoOutput = _videoOutput, let reader = _reader, reader.canAdd(videoOutput) {
+            reader.add(videoOutput)
         }
         
         // video input
-        if _writer?.canApply(outputSettings: videoOutputConfiguration, forMediaType: AVMediaType.video) == true {
-            _videoInput = AVAssetWriterInput(mediaType: AVMediaType.video, outputSettings: videoOutputConfiguration)
+        if _writer?.canApply(outputSettings: videoOutputConfiguration, forMediaType: .video) == true {
+            _videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoOutputConfiguration)
             _videoInput?.expectsMediaDataInRealTime = expectsMediaDataInRealTime
         } else {
             fatalError("Unsupported output configuration")
         }
         
-        if let writer = _writer,
-            let videoInput = _videoInput {
+        if let writer = _writer, let videoInput = _videoInput {
             if writer.canAdd(videoInput) {
                 writer.add(videoInput)
             }
@@ -299,11 +275,8 @@ extension NextLevelSessionExporter {
         _audioOutput = AVAssetReaderAudioMixOutput(audioTracks: audioTracks, audioSettings: nil)
         _audioOutput?.alwaysCopiesSampleData = false
         _audioOutput?.audioMix = audioMix
-        if let reader = _reader,
-            let audioOutput = _audioOutput {
-            if reader.canAdd(audioOutput) {
-                reader.add(audioOutput)
-            }
+        if let reader = _reader, let audioOutput = _audioOutput, reader.canAdd(audioOutput) {
+            reader.add(audioOutput)
         }
     }
     
@@ -311,11 +284,8 @@ extension NextLevelSessionExporter {
         if _audioOutput != nil {
             _audioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: audioOutputConfiguration)
             _audioInput?.expectsMediaDataInRealTime = expectsMediaDataInRealTime
-            if let writer = _writer,
-                let audioInput = _audioInput {
-                if writer.canAdd(audioInput) {
-                    writer.add(audioInput)
-                }
+            if let writer = _writer, let audioInput = _audioInput, writer.canAdd(audioInput) {
+                writer.add(audioInput)
             }
         }
     }
@@ -328,29 +298,19 @@ extension NextLevelSessionExporter {
         let audioSemaphore = DispatchSemaphore(value: 0)
         let videoSemaphore = DispatchSemaphore(value: 0)
         
-        _inputQueue = DispatchQueue(label: NextLevelSessionExporterInputQueue, autoreleaseFrequency: .workItem, target: .global())
-        guard let inputQueue = _inputQueue else {
-            fatalError("\(#function) _inputQueue is nil")
-        }
         let videoTracks = asset.tracks(withMediaType: .video)
-        if let videoInput = _videoInput,
-            let videoOutput = _videoOutput {
-            if videoTracks.count > 0 {
-                videoInput.requestMediaDataWhenReady(on: inputQueue, using: {
-                    if self.encode(readySamplesFromReaderOutput: videoOutput, toWriterInput: videoInput) == false {
-                        videoSemaphore.signal()
-                    }
-                })
-            } else {
-                videoSemaphore.signal()
-            }
+        if let videoInput = _videoInput, let videoOutput = _videoOutput, videoTracks.count > 0 {
+            videoInput.requestMediaDataWhenReady(on: _inputQueue, using: {
+                if self.encode(readySamplesFromReaderOutput: videoOutput, toWriterInput: videoInput) == false {
+                    videoSemaphore.signal()
+                }
+            })
         } else {
             videoSemaphore.signal()
         }
         
-        if let audioInput = _audioInput,
-            let audioOutput = _audioOutput {
-            audioInput.requestMediaDataWhenReady(on: inputQueue, using: {
+        if let audioInput = _audioInput, let audioOutput = _audioOutput {
+            audioInput.requestMediaDataWhenReady(on: _inputQueue, using: {
                 if self.encode(readySamplesFromReaderOutput: audioOutput, toWriterInput: audioInput) == false {
                     audioSemaphore.signal()
                 }
@@ -370,7 +330,7 @@ extension NextLevelSessionExporter {
     
     /// Cancels any export in progress.
     public func cancelExport() {
-        _inputQueue?.async {
+        _inputQueue.sync {
             if self._writer?.status == .writing {
                 self._writer?.cancelWriting()
             }
@@ -434,7 +394,6 @@ extension NextLevelSessionExporter {
                 if error {
                     return false
                 }
-                
             } else {
                 input.markAsFinished()
                 return false
@@ -444,88 +403,83 @@ extension NextLevelSessionExporter {
     }
     
     internal func createVideoComposition() -> AVMutableVideoComposition {
-        
         let videoComposition = AVMutableVideoComposition()
+        guard let videoTrack = asset.tracks(withMediaType: .video).first else { return videoComposition
+        }
         
-        if let asset = asset,
-            let videoTrack = asset.tracks(withMediaType: AVMediaType.video).first {
-            
-            // determine the framerate
-            
-            var frameRate: Float = 0
-            if let videoConfiguration = videoOutputConfiguration {
-                if let videoCompressionConfiguration = videoConfiguration[AVVideoCompressionPropertiesKey] as? [String: Any] {
-                    if let trackFrameRate = videoCompressionConfiguration[AVVideoAverageNonDroppableFrameRateKey] as? NSNumber {
-                        frameRate = trackFrameRate.floatValue
-                    }
+        // determine the framerate
+        
+        var frameRate: Float = 0
+        if let videoConfiguration = videoOutputConfiguration {
+            if let videoCompressionConfiguration = videoConfiguration[AVVideoCompressionPropertiesKey] as? [String: Any] {
+                if let trackFrameRate = videoCompressionConfiguration[AVVideoAverageNonDroppableFrameRateKey] as? NSNumber {
+                    frameRate = trackFrameRate.floatValue
                 }
-            } else {
-                frameRate = videoTrack.nominalFrameRate
             }
+        } else {
+            frameRate = videoTrack.nominalFrameRate
+        }
+        
+        if frameRate == 0 {
+            frameRate = 30
+        }
+        videoComposition.frameDuration = CMTimeMake(value: 1, timescale: Int32(frameRate))
+        
+        // determine the appropriate size and transform
+        
+        if let videoConfiguration = videoOutputConfiguration {
+            let videoWidth = videoConfiguration[AVVideoWidthKey] as? NSNumber
+            let videoHeight = videoConfiguration[AVVideoHeightKey] as? NSNumber
             
-            if frameRate == 0 {
-                frameRate = 30
+            // validated to be non-nil byt this point
+            let width = videoWidth!.intValue
+            let height = videoHeight!.intValue
+            
+            let targetSize = CGSize(width: width, height: height)
+            var naturalSize = videoTrack.naturalSize
+            
+            var transform = videoTrack.preferredTransform
+            
+            let rect = CGRect(x: 0, y: 0, width: naturalSize.width, height: naturalSize.height)
+            let transformedRect = rect.applying(transform)
+            // transformedRect should have origin at 0 if correct; otherwise add offset to correct it
+            transform.tx -= transformedRect.origin.x
+            transform.ty -= transformedRect.origin.y
+            
+            let videoAngleInDegrees = atan2(transform.b, transform.a) * 180 / .pi
+            if videoAngleInDegrees == 90 || videoAngleInDegrees == -90 {
+                let tempWidth = naturalSize.width
+                naturalSize.width = naturalSize.height
+                naturalSize.height = tempWidth
             }
-            videoComposition.frameDuration = CMTimeMake(value: 1, timescale: Int32(frameRate))
+            videoComposition.renderSize = naturalSize
             
-            // determine the appropriate size and transform
+            // center the video
             
-            if let videoConfiguration = videoOutputConfiguration {
-                
-                let videoWidth = videoConfiguration[AVVideoWidthKey] as? NSNumber
-                let videoHeight = videoConfiguration[AVVideoHeightKey] as? NSNumber
-                
-                // validated to be non-nil byt this point
-                let width = videoWidth!.intValue
-                let height = videoHeight!.intValue
-                
-                let targetSize = CGSize(width: width, height: height)
-                var naturalSize = videoTrack.naturalSize
-                
-                var transform = videoTrack.preferredTransform
-                
-                let rect = CGRect(x: 0, y: 0, width: naturalSize.width, height: naturalSize.height)
-                let transformedRect = rect.applying(transform)
-                // transformedRect should have origin at 0 if correct; otherwise add offset to correct it
-                transform.tx -= transformedRect.origin.x
-                transform.ty -= transformedRect.origin.y
-                
-                let videoAngleInDegrees = atan2(transform.b, transform.a) * 180 / .pi
-                if videoAngleInDegrees == 90 || videoAngleInDegrees == -90 {
-                    let tempWidth = naturalSize.width
-                    naturalSize.width = naturalSize.height
-                    naturalSize.height = tempWidth
-                }
-                videoComposition.renderSize = naturalSize
-                
-                // center the video
-                
-                var ratio: CGFloat = 0
-                let xRatio: CGFloat = targetSize.width / naturalSize.width
-                let yRatio: CGFloat = targetSize.height / naturalSize.height
-                ratio = min(xRatio, yRatio)
-                
-                let postWidth = naturalSize.width * ratio
-                let postHeight = naturalSize.height * ratio
-                let transX = (targetSize.width - postWidth) * 0.5
-                let transY = (targetSize.height - postHeight) * 0.5
-                
-                var matrix = CGAffineTransform(translationX: (transX / xRatio), y: (transY / yRatio))
-                matrix = matrix.scaledBy(x: (ratio / xRatio), y: (ratio / yRatio))
-                transform = transform.concatenating(matrix)
-                
-                // make the composition
-                
-                let compositionInstruction = AVMutableVideoCompositionInstruction()
-                compositionInstruction.timeRange = CMTimeRange(start: CMTime.zero, duration: asset.duration)
-                
-                let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: videoTrack)
-                layerInstruction.setTransform(transform, at: CMTime.zero)
-                
-                compositionInstruction.layerInstructions = [layerInstruction]
-                videoComposition.instructions = [compositionInstruction]
-                
-            }
+            var ratio: CGFloat = 0
+            let xRatio = targetSize.width / naturalSize.width
+            let yRatio = targetSize.height / naturalSize.height
+            ratio = min(xRatio, yRatio)
+            
+            let postWidth = naturalSize.width * ratio
+            let postHeight = naturalSize.height * ratio
+            let transX = (targetSize.width - postWidth) * 0.5
+            let transY = (targetSize.height - postHeight) * 0.5
+            
+            var matrix = CGAffineTransform(translationX: (transX / xRatio), y: (transY / yRatio))
+            matrix = matrix.scaledBy(x: (ratio / xRatio), y: (ratio / yRatio))
+            transform = transform.concatenating(matrix)
+            
+            // make the composition
+            
+            let compositionInstruction = AVMutableVideoCompositionInstruction()
+            compositionInstruction.timeRange = CMTimeRange(start: .zero, duration: asset.duration)
+            
+            let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: videoTrack)
+            layerInstruction.setTransform(transform, at: .zero)
+            
+            compositionInstruction.layerInstructions = [layerInstruction]
+            videoComposition.instructions = [compositionInstruction]
         }
         
         return videoComposition
@@ -564,17 +518,17 @@ extension NextLevelSessionExporter {
     internal func complete() {
         if _writer?.status == .failed || _writer?.status == .cancelled {
             if let outputURL = outputURL {
-                if FileManager.default.fileExists(atPath: outputURL.absoluteString) == true {
+                if FileManager.default.fileExists(atPath: outputURL.absoluteString) {
                     do {
                         try FileManager.default.removeItem(at: outputURL)
                     } catch {
-                        debugPrint("NextLevelSessionExporter, failed to delete file at \(outputURL)")
+                        debugPrint("NextLevelSessionExporter, failed to delete file at \(outputURL)", error)
                     }
                 }
             }
         }
         
-        _completionHandler?(status)
+        _completionHandler?(status, _writer?.error)
         _completionHandler = nil
     }
     
@@ -597,7 +551,6 @@ extension NextLevelSessionExporter {
         _reader = nil
         _pixelBufferAdaptor = nil
         
-        _inputQueue = nil
         _videoOutput = nil
         _audioOutput = nil
         _videoInput = nil
