@@ -34,13 +34,12 @@ public enum NextLevelSessionExporterError: Error, CustomStringConvertible {
     case setupFailure
     
     public var description: String {
-        get {
-            switch self {
-            case .setupFailure:
-                return "Setup failure"
-            }
+        switch self {
+        case .setupFailure:
+            return "Setup failure"
         }
     }
+    
 }
 
 // MARK: - NextLevelSessionExporter
@@ -88,36 +87,32 @@ public class NextLevelSessionExporter: NSObject {
     
     /// Export session status state.
     public var status: AVAssetExportSession.Status {
-        get {
-            if let writer = self._writer {
-                switch writer.status {
-                case .writing:
-                    return .exporting
-                case .failed:
-                    return .failed
-                case .completed:
-                    return .completed
-                case.cancelled:
-                    return .cancelled
-                case .unknown:
-                    break
-                }
+        if let writer = _writer {
+            switch writer.status {
+            case .writing:
+                return .exporting
+            case .failed:
+                return .failed
+            case .completed:
+                return .completed
+            case.cancelled:
+                return .cancelled
+            case .unknown:
+                break
             }
-            return .unknown
         }
+        return .unknown
     }
     
     /// Session exporting progress from 0 to 1.
     public var progress: Float {
-        get {
-            return self._progress
-        }
+        return _progress
     }
     
     // private instance vars
     
-    internal var _writer: AVAssetWriter?
-    internal var _reader: AVAssetReader?
+    internal var _writer: AVAssetWriter!
+    internal var _reader: AVAssetReader!
     internal var _pixelBufferAdaptor: AVAssetWriterInputPixelBufferAdaptor?
     
     internal var _inputQueue: DispatchQueue?
@@ -147,19 +142,19 @@ public class NextLevelSessionExporter: NSObject {
     }
     
     override init() {
-        self.timeRange = CMTimeRange(start: CMTime.zero, end: CMTime.positiveInfinity)
+        timeRange = CMTimeRange(start: CMTime.zero, end: CMTime.positiveInfinity)
         super.init()
     }
     
     deinit {
-        self._writer = nil
-        self._reader = nil
-        self._pixelBufferAdaptor = nil
-        self._inputQueue = nil
-        self._videoOutput = nil
-        self._audioOutput = nil
-        self._videoInput = nil
-        self._audioInput = nil
+        _writer = nil
+        _reader = nil
+        _pixelBufferAdaptor = nil
+        _inputQueue = nil
+        _videoOutput = nil
+        _audioOutput = nil
+        _videoInput = nil
+        _audioInput = nil
     }
 }
 
@@ -181,58 +176,58 @@ extension NextLevelSessionExporter {
     /// - Parameter completionHandler: Handler called when an export session completes.
     /// - Throws: Failure indication thrown when an error has occurred during export.
     public func export(renderHandler: RenderHandler? = nil, progressHandler: ProgressHandler? = nil, completionHandler: CompletionHandler? = nil) throws {
-        self.cancelExport()
+        cancelExport()
         
-        self._progressHandler = progressHandler
-        self._renderHandler = renderHandler
-        self._completionHandler = completionHandler
+        _progressHandler = progressHandler
+        _renderHandler = renderHandler
+        _completionHandler = completionHandler
         
-        if let outputURL = self.outputURL,
-            let outputFileType = self.outputFileType,
-            let asset = self.asset {
-            
-            do {
-                self._reader = try AVAssetReader(asset: asset)
-            } catch {
-                print("NextLevelSessionExporter, could not setup a reader for the provided asset \(asset)")
-                return
-            }
-            
-            do {
-                self._writer = try AVAssetWriter(outputURL: outputURL, fileType: outputFileType)
-            } catch {
-                print("NextLevelSessionExporter, could not setup a reader for the provided asset \(asset)")
-                return
-            }
-            
-        } else {
-            throw NextLevelSessionExporterError.setupFailure
+        guard let outputURL = outputURL,
+            let outputFileType = outputFileType,
+            let asset = asset else {
+                throw NextLevelSessionExporterError.setupFailure
         }
         
-        if self.validateVideoOutputConfiguration() == false {
+        do {
+            _reader = try AVAssetReader(asset: asset)
+        } catch {
+            print("NextLevelSessionExporter, could not setup a reader for the provided asset \(asset)")
+            debugPrint("Error", error)
+            throw error
+        }
+        
+        do {
+            _writer = try AVAssetWriter(outputURL: outputURL, fileType: outputFileType)
+        } catch {
+            print("NextLevelSessionExporter, could not setup a writer for the provided asset \(asset)")
+            debugPrint("Error", error)
+            throw error
+        }
+        
+        if validateVideoOutputConfiguration() == false {
             print("NextLevelSessionExporter, could not setup with the specified video output configuration")
             throw NextLevelSessionExporterError.setupFailure
         }
         
-        self._reader?.timeRange = self.timeRange
-        self._writer?.shouldOptimizeForNetworkUse = self.optimizeForNetworkUse
+        _reader.timeRange = timeRange
+        _writer.shouldOptimizeForNetworkUse = optimizeForNetworkUse
         
-        if let metadata = self.metadata {
-            self._writer?.metadata = metadata
+        if let metadata = metadata {
+            _writer.metadata = metadata
         }
         
-        if self.timeRange.duration.isValid && self.timeRange.duration.isPositiveInfinity == false {
-            self._duration = CMTimeGetSeconds(self.timeRange.duration)
+        if timeRange.duration.isValid && timeRange.duration.isPositiveInfinity == false {
+            _duration = CMTimeGetSeconds(timeRange.duration)
         } else {
-            self._duration = CMTimeGetSeconds(self.asset!.duration)
+            _duration = CMTimeGetSeconds(asset.duration)
         }
         
-        if self.videoOutputConfiguration?.keys.contains(AVVideoCodecKey) == false {
+        if videoOutputConfiguration?.keys.contains(AVVideoCodecKey) == false {
             print("NextLevelSessionExporter, warning a video output configuration codec wasn't specified")
             if #available(iOS 11.0, *) {
-                self.videoOutputConfiguration?[AVVideoCodecKey] = AVVideoCodecType.h264
+                videoOutputConfiguration?[AVVideoCodecKey] = AVVideoCodecType.h264
             } else {
-                self.videoOutputConfiguration?[AVVideoCodecKey] = AVVideoCodecH264
+                videoOutputConfiguration?[AVVideoCodecKey] = AVVideoCodecH264
             }
         }
         
@@ -240,32 +235,32 @@ extension NextLevelSessionExporter {
         
         if let videoTracks = self.asset?.tracks(withMediaType: AVMediaType.video) {
             if videoTracks.count > 0 {
-                self._videoOutput = AVAssetReaderVideoCompositionOutput(videoTracks: videoTracks, videoSettings: self.videoInputConfiguration)
-                self._videoOutput?.alwaysCopiesSampleData = false
+                _videoOutput = AVAssetReaderVideoCompositionOutput(videoTracks: videoTracks, videoSettings: videoInputConfiguration)
+                _videoOutput?.alwaysCopiesSampleData = false
                 
-                if let videoComposition = self.videoComposition {
-                    self._videoOutput?.videoComposition = videoComposition
+                if let videoComposition = videoComposition {
+                    _videoOutput?.videoComposition = videoComposition
                 } else {
-                    self._videoOutput?.videoComposition = self.createVideoComposition()
+                    _videoOutput?.videoComposition = createVideoComposition()
                 }
                 
-                if let videoOutput = self._videoOutput,
-                    let reader = self._reader {
+                if let videoOutput = _videoOutput,
+                    let reader = _reader {
                     if reader.canAdd(videoOutput) {
                         reader.add(videoOutput)
                     }
                 }
                 
                 // video input
-                if self._writer?.canApply(outputSettings: self.videoOutputConfiguration, forMediaType: AVMediaType.video) == true {
-                    self._videoInput = AVAssetWriterInput(mediaType: AVMediaType.video, outputSettings: self.videoOutputConfiguration)
-                    self._videoInput?.expectsMediaDataInRealTime = self.expectsMediaDataInRealTime
+                if _writer?.canApply(outputSettings: videoOutputConfiguration, forMediaType: AVMediaType.video) == true {
+                    _videoInput = AVAssetWriterInput(mediaType: AVMediaType.video, outputSettings: videoOutputConfiguration)
+                    _videoInput?.expectsMediaDataInRealTime = expectsMediaDataInRealTime
                 } else {
                     fatalError("Unsupported output configuration")
                 }
                 
-                if let writer = self._writer,
-                    let videoInput = self._videoInput {
+                if let writer = _writer,
+                    let videoInput = _videoInput {
                     if writer.canAdd(videoInput) {
                         writer.add(videoInput)
                     }
@@ -273,15 +268,15 @@ extension NextLevelSessionExporter {
                     // setup pixelbuffer adaptor
                     
                     var pixelBufferAttrib: [String : Any] = [:]
-                    pixelBufferAttrib[kCVPixelBufferPixelFormatTypeKey as String] = NSNumber(integerLiteral: Int(kCVPixelFormatType_32RGBA))
-                    if let videoComposition = self._videoOutput?.videoComposition {
-                        pixelBufferAttrib[kCVPixelBufferWidthKey as String] = NSNumber(integerLiteral: Int(videoComposition.renderSize.width))
-                        pixelBufferAttrib[kCVPixelBufferHeightKey as String] = NSNumber(integerLiteral: Int(videoComposition.renderSize.height))
+                    pixelBufferAttrib[kCVPixelBufferPixelFormatTypeKey as String] = NSNumber(value: Int(kCVPixelFormatType_32RGBA))
+                    if let videoComposition = _videoOutput?.videoComposition {
+                        pixelBufferAttrib[kCVPixelBufferWidthKey as String] = NSNumber(value: Int(videoComposition.renderSize.width))
+                        pixelBufferAttrib[kCVPixelBufferHeightKey as String] = NSNumber(value: Int(videoComposition.renderSize.height))
                     }
-                    pixelBufferAttrib["IOSurfaceOpenGLESTextureCompatibility"] = NSNumber(booleanLiteral:  true)
-                    pixelBufferAttrib["IOSurfaceOpenGLESFBOCompatibility"] = NSNumber(booleanLiteral:  true)
+                    pixelBufferAttrib["IOSurfaceOpenGLESTextureCompatibility"] = NSNumber(value:  true)
+                    pixelBufferAttrib["IOSurfaceOpenGLESFBOCompatibility"] = NSNumber(value: true)
                     
-                    self._pixelBufferAdaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: videoInput, sourcePixelBufferAttributes: pixelBufferAttrib)
+                    _pixelBufferAdaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: videoInput, sourcePixelBufferAttributes: pixelBufferAttrib)
                 }
             }
         }
@@ -290,27 +285,27 @@ extension NextLevelSessionExporter {
         
         if let audioTracks = self.asset?.tracks(withMediaType: AVMediaType.audio) {
             if audioTracks.count > 0 {
-                self._audioOutput = AVAssetReaderAudioMixOutput(audioTracks: audioTracks, audioSettings: nil)
-                self._audioOutput?.alwaysCopiesSampleData = false
-                self._audioOutput?.audioMix = self.audioMix
-                if let reader = self._reader,
-                    let audioOutput = self._audioOutput {
+                _audioOutput = AVAssetReaderAudioMixOutput(audioTracks: audioTracks, audioSettings: nil)
+                _audioOutput?.alwaysCopiesSampleData = false
+                _audioOutput?.audioMix = audioMix
+                if let reader = _reader,
+                    let audioOutput = _audioOutput {
                     if reader.canAdd(audioOutput) {
                         reader.add(audioOutput)
                     }
                 }
             } else {
-                self._audioOutput = nil
+                _audioOutput = nil
             }
         }
         
         // audio input
         
-        if let _ = self._audioOutput {
-            self._audioInput = AVAssetWriterInput(mediaType: AVMediaType.audio, outputSettings: self.audioOutputConfiguration)
-            self._audioInput?.expectsMediaDataInRealTime = self.expectsMediaDataInRealTime
-            if let writer = self._writer,
-                let audioInput = self._audioInput {
+        if _audioOutput != nil {
+            _audioInput = AVAssetWriterInput(mediaType: AVMediaType.audio, outputSettings: audioOutputConfiguration)
+            _audioInput?.expectsMediaDataInRealTime = expectsMediaDataInRealTime
+            if let writer = _writer,
+                let audioInput = _audioInput {
                 if writer.canAdd(audioInput) {
                     writer.add(audioInput)
                 }
@@ -319,19 +314,19 @@ extension NextLevelSessionExporter {
         
         // export
         
-        self._writer?.startWriting()
-        self._reader?.startReading()
-        self._writer?.startSession(atSourceTime: self.timeRange.start)
+        _writer?.startWriting()
+        _reader?.startReading()
+        _writer?.startSession(atSourceTime: timeRange.start)
         
         let audioSemaphore = DispatchSemaphore(value: 0)
         let videoSemaphore = DispatchSemaphore(value: 0)
         
-        self._inputQueue = DispatchQueue(label: NextLevelSessionExporterInputQueue, autoreleaseFrequency: .workItem, target: DispatchQueue.global())
-        if let inputQueue = self._inputQueue {
+        _inputQueue = DispatchQueue(label: NextLevelSessionExporterInputQueue, autoreleaseFrequency: .workItem, target: DispatchQueue.global())
+        if let inputQueue = _inputQueue {
             
             if let videoTracks = self.asset?.tracks(withMediaType: AVMediaType.video),
-                let videoInput = self._videoInput,
-                let videoOutput = self._videoOutput {
+                let videoInput = _videoInput,
+                let videoOutput = _videoOutput {
                 if videoTracks.count > 0 {
                     videoInput.requestMediaDataWhenReady(on: inputQueue, using: {
                         if self.encode(readySamplesFromReaderOutput: videoOutput, toWriterInput: videoInput) == false {
@@ -345,8 +340,8 @@ extension NextLevelSessionExporter {
                 videoSemaphore.signal()
             }
             
-            if let audioInput = self._audioInput,
-                let audioOutput = self._audioOutput {
+            if let audioInput = _audioInput,
+                let audioOutput = _audioOutput {
                 audioInput.requestMediaDataWhenReady(on: inputQueue, using: {
                     if self.encode(readySamplesFromReaderOutput: audioOutput, toWriterInput: audioInput) == false {
                         audioSemaphore.signal()
@@ -369,7 +364,7 @@ extension NextLevelSessionExporter {
     
     /// Cancels any export in progress.
     public func cancelExport() {
-        self._inputQueue?.async {
+        _inputQueue?.async {
             if self._writer?.status == .writing {
                 self._writer?.cancelWriting()
             }
@@ -396,28 +391,28 @@ extension NextLevelSessionExporter {
                 var handled = false
                 var error = false
                 
-                if self._reader?.status != .reading || self._writer?.status != .writing {
+                if _reader?.status != .reading || _writer?.status != .writing {
                     handled = true
                     error = true
                 }
                 
-                if handled == false && self._videoOutput == output {
+                if handled == false && _videoOutput == output {
                     // determine progress
-                    self._lastSamplePresentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer) - self.timeRange.start
-                    let progress = self._duration == 0 ? 1 : Float(CMTimeGetSeconds(self._lastSamplePresentationTime) / self._duration)
-                    self.updateProgress(progress: progress)
+                    _lastSamplePresentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer) - timeRange.start
+                    let progress = _duration == 0 ? 1 : Float(CMTimeGetSeconds(_lastSamplePresentationTime) / _duration)
+                    updateProgress(progress: progress)
                     
                     // prepare progress frames
-                    if let pixelBufferAdaptor = self._pixelBufferAdaptor,
+                    if let pixelBufferAdaptor = _pixelBufferAdaptor,
                         let pixelBufferPool = pixelBufferAdaptor.pixelBufferPool,
                         let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
                         
-                        var toRenderBuffer: CVPixelBuffer? = nil
+                        var toRenderBuffer: CVPixelBuffer?
                         let result = CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pixelBufferPool, &toRenderBuffer)
                         if result == kCVReturnSuccess {
                             if let toBuffer = toRenderBuffer {
-                                self._renderHandler?(pixelBuffer, self._lastSamplePresentationTime, toBuffer)
-                                if pixelBufferAdaptor.append(toBuffer, withPresentationTime:self._lastSamplePresentationTime) == false {
+                                _renderHandler?(pixelBuffer, _lastSamplePresentationTime, toBuffer)
+                                if pixelBufferAdaptor.append(toBuffer, withPresentationTime:_lastSamplePresentationTime) == false {
                                     error = true
                                 }
                                 handled = true
@@ -446,13 +441,13 @@ extension NextLevelSessionExporter {
         
         let videoComposition = AVMutableVideoComposition()
         
-        if let asset = self.asset,
+        if let asset = asset,
             let videoTrack = asset.tracks(withMediaType: AVMediaType.video).first {
             
             // determine the framerate
             
             var frameRate: Float = 0
-            if let videoConfiguration = self.videoOutputConfiguration {
+            if let videoConfiguration = videoOutputConfiguration {
                 if let videoCompressionConfiguration = videoConfiguration[AVVideoCompressionPropertiesKey] as? [String: Any] {
                     if let trackFrameRate = videoCompressionConfiguration[AVVideoAverageNonDroppableFrameRateKey] as? NSNumber {
                         frameRate = trackFrameRate.floatValue
@@ -469,7 +464,7 @@ extension NextLevelSessionExporter {
             
             // determine the appropriate size and transform
             
-            if let videoConfiguration = self.videoOutputConfiguration {
+            if let videoConfiguration = videoOutputConfiguration {
                 
                 let videoWidth = videoConfiguration[AVVideoWidthKey] as? NSNumber
                 let videoHeight = videoConfiguration[AVVideoHeightKey] as? NSNumber
@@ -486,9 +481,8 @@ extension NextLevelSessionExporter {
                 let rect = CGRect(x: 0, y: 0, width: naturalSize.width, height: naturalSize.height)
                 let transformedRect = rect.applying(transform)
                 // transformedRect should have origin at 0 if correct; otherwise add offset to correct it
-                transform.tx -= transformedRect.origin.x;
-                transform.ty -= transformedRect.origin.y;
-                
+                transform.tx -= transformedRect.origin.x
+                transform.ty -= transformedRect.origin.y
                 
                 let videoAngleInDegrees = atan2(transform.b, transform.a) * 180 / .pi
                 if videoAngleInDegrees == 90 || videoAngleInDegrees == -90 {
@@ -532,61 +526,59 @@ extension NextLevelSessionExporter {
     }
     
     internal func updateProgress(progress: Float) {
-        self.willChangeValue(forKey: "progress")
-        self._progress = progress
-        self.didChangeValue(forKey: "progress")
-        self._progressHandler?(progress)
+        willChangeValue(forKey: "progress")
+        _progress = progress
+        didChangeValue(forKey: "progress")
+        _progressHandler?(progress)
     }
     
     internal func finish() {
-        if self._reader?.status == .cancelled || self._writer?.status == .cancelled {
+        if _reader?.status == .cancelled || _writer?.status == .cancelled {
             return
         }
         
-        if self._writer?.status == .failed {
-            if let error = self._writer?.error {
+        if _writer?.status == .failed {
+            if let error = _writer?.error {
                 debugPrint("NextLevelSessionExporter, writing failed, \(error)")
             }
-            self.complete()
-        } else if self._reader?.status == .failed {
-            if let error = self._writer?.error {
+            complete()
+        } else if _reader?.status == .failed {
+            if let error = _writer?.error {
                 debugPrint("NextLevelSessionExporter, reading failed, \(error)")
             }
-            self._writer?.cancelWriting()
-            self.complete()
+            _writer?.cancelWriting()
+            complete()
         } else {
-            self._writer?.finishWriting {
+            _writer?.finishWriting {
                 self.complete()
             }
         }
     }
     
     internal func complete() {
-        if self._writer?.status == .failed || self._writer?.status == .cancelled {
-            if let outputURL = self.outputURL {
+        if _writer?.status == .failed || _writer?.status == .cancelled {
+            if let outputURL = outputURL {
                 if FileManager.default.fileExists(atPath: outputURL.absoluteString) == true {
                     do {
                         try FileManager.default.removeItem(at: outputURL)
-                    } catch  {
+                    } catch {
                         debugPrint("NextLevelSessionExporter, failed to delete file at \(outputURL)")
                     }
                 }
             }
         }
         
-        self._completionHandler?(self.status)
-        self._completionHandler = nil
+        _completionHandler?(status)
+        _completionHandler = nil
     }
     
     internal func validateVideoOutputConfiguration() -> Bool {
-        if let videoOutputConfiguration = self.videoOutputConfiguration {
+        if let videoOutputConfiguration = videoOutputConfiguration {
             let videoWidth = videoOutputConfiguration[AVVideoWidthKey] as? NSNumber
             let videoHeight = videoOutputConfiguration[AVVideoHeightKey] as? NSNumber
             if videoWidth == nil || videoHeight == nil {
                 return false
             }
-            
-            // TODO add more checks when needed
             
             return true
         }
@@ -594,20 +586,20 @@ extension NextLevelSessionExporter {
     }
     
     internal func reset() {
-        self._progress = 0
-        self._writer = nil
-        self._reader = nil
-        self._pixelBufferAdaptor = nil
+        _progress = 0
+        _writer = nil
+        _reader = nil
+        _pixelBufferAdaptor = nil
         
-        self._inputQueue = nil
-        self._videoOutput = nil
-        self._audioOutput = nil
-        self._videoInput = nil
-        self._audioInput = nil
-
-        self._progressHandler = nil
-        self._renderHandler = nil
-        self._completionHandler = nil
+        _inputQueue = nil
+        _videoOutput = nil
+        _audioOutput = nil
+        _videoInput = nil
+        _audioInput = nil
+        
+        _progressHandler = nil
+        _renderHandler = nil
+        _completionHandler = nil
     }
     
 }
@@ -615,7 +607,7 @@ extension NextLevelSessionExporter {
 // MARK: - AVAsset extension
 
 extension AVAsset {
-
+    
     /// Initiates a NextLevelSessionExport on the asset
     ///
     /// - Parameters:
@@ -628,13 +620,13 @@ extension AVAsset {
     ///   - progressHandler: progress fraction handler
     ///   - completionHandler: completion handler
     public func nextlevel_export(outputFileType: AVFileType? = AVFileType.mp4,
-                                   outputURL: URL,
-                                   metadata: [AVMetadataItem]? = nil,
-                                   videoInputConfiguration: [String : Any]? = nil,
-                                   videoOutputConfiguration: [String : Any],
-                                   audioOutputConfiguration: [String : Any],
-                                   progressHandler: NextLevelSessionExporter.ProgressHandler? = nil,
-                                   completionHandler: NextLevelSessionExporter.CompletionHandler? = nil) {
+                                 outputURL: URL,
+                                 metadata: [AVMetadataItem]? = nil,
+                                 videoInputConfiguration: [String : Any]? = nil,
+                                 videoOutputConfiguration: [String : Any],
+                                 audioOutputConfiguration: [String : Any],
+                                 progressHandler: NextLevelSessionExporter.ProgressHandler? = nil,
+                                 completionHandler: NextLevelSessionExporter.CompletionHandler? = nil) {
         let exporter = NextLevelSessionExporter(withAsset: self)
         exporter.outputFileType = outputFileType
         exporter.outputURL = outputURL
