@@ -146,7 +146,7 @@ public class NextLevelSessionExporter: NSObject {
         self.asset = asset
     }
     
-    override init() {
+    public override init() {
         self.timeRange = CMTimeRange(start: CMTime.zero, end: CMTime.positiveInfinity)
         super.init()
     }
