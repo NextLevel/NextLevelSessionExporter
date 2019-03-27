@@ -181,6 +181,11 @@ extension NextLevelSessionExporter {
     /// - Parameter completionHandler: Handler called when an export session completes.
     /// - Throws: Failure indication thrown when an error has occurred during export.
     public func export(renderHandler: RenderHandler? = nil, progressHandler: ProgressHandler? = nil, completionHandler: CompletionHandler? = nil) throws {
+        guard let asset = self.asset else {
+            print("NextLevelSessionExporter, an asset is required for encoding")
+            return
+        }
+        
         self.cancelExport()
         
         self._progressHandler = progressHandler
@@ -236,86 +241,9 @@ extension NextLevelSessionExporter {
             }
         }
         
-        // video output
-        
-        if let videoTracks = self.asset?.tracks(withMediaType: AVMediaType.video) {
-            if videoTracks.count > 0 {
-                self._videoOutput = AVAssetReaderVideoCompositionOutput(videoTracks: videoTracks, videoSettings: self.videoInputConfiguration)
-                self._videoOutput?.alwaysCopiesSampleData = false
-                
-                if let videoComposition = self.videoComposition {
-                    self._videoOutput?.videoComposition = videoComposition
-                } else {
-                    self._videoOutput?.videoComposition = self.createVideoComposition()
-                }
-                
-                if let videoOutput = self._videoOutput,
-                    let reader = self._reader {
-                    if reader.canAdd(videoOutput) {
-                        reader.add(videoOutput)
-                    }
-                }
-                
-                // video input
-                if self._writer?.canApply(outputSettings: self.videoOutputConfiguration, forMediaType: AVMediaType.video) == true {
-                    self._videoInput = AVAssetWriterInput(mediaType: AVMediaType.video, outputSettings: self.videoOutputConfiguration)
-                    self._videoInput?.expectsMediaDataInRealTime = self.expectsMediaDataInRealTime
-                } else {
-                    fatalError("Unsupported output configuration")
-                }
-                
-                if let writer = self._writer,
-                    let videoInput = self._videoInput {
-                    if writer.canAdd(videoInput) {
-                        writer.add(videoInput)
-                    }
-                    
-                    // setup pixelbuffer adaptor
-                    
-                    var pixelBufferAttrib: [String : Any] = [:]
-                    pixelBufferAttrib[kCVPixelBufferPixelFormatTypeKey as String] = NSNumber(integerLiteral: Int(kCVPixelFormatType_32RGBA))
-                    if let videoComposition = self._videoOutput?.videoComposition {
-                        pixelBufferAttrib[kCVPixelBufferWidthKey as String] = NSNumber(integerLiteral: Int(videoComposition.renderSize.width))
-                        pixelBufferAttrib[kCVPixelBufferHeightKey as String] = NSNumber(integerLiteral: Int(videoComposition.renderSize.height))
-                    }
-                    pixelBufferAttrib["IOSurfaceOpenGLESTextureCompatibility"] = NSNumber(booleanLiteral:  true)
-                    pixelBufferAttrib["IOSurfaceOpenGLESFBOCompatibility"] = NSNumber(booleanLiteral:  true)
-                    
-                    self._pixelBufferAdaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: videoInput, sourcePixelBufferAttributes: pixelBufferAttrib)
-                }
-            }
-        }
-        
-        // audio output
-        
-        if let audioTracks = self.asset?.tracks(withMediaType: AVMediaType.audio) {
-            if audioTracks.count > 0 {
-                self._audioOutput = AVAssetReaderAudioMixOutput(audioTracks: audioTracks, audioSettings: nil)
-                self._audioOutput?.alwaysCopiesSampleData = false
-                self._audioOutput?.audioMix = self.audioMix
-                if let reader = self._reader,
-                    let audioOutput = self._audioOutput {
-                    if reader.canAdd(audioOutput) {
-                        reader.add(audioOutput)
-                    }
-                }
-            } else {
-                self._audioOutput = nil
-            }
-        }
-        
-        // audio input
-        
-        if let _ = self._audioOutput {
-            self._audioInput = AVAssetWriterInput(mediaType: AVMediaType.audio, outputSettings: self.audioOutputConfiguration)
-            self._audioInput?.expectsMediaDataInRealTime = self.expectsMediaDataInRealTime
-            if let writer = self._writer,
-                let audioInput = self._audioInput {
-                if writer.canAdd(audioInput) {
-                    writer.add(audioInput)
-                }
-            }
-        }
+        self.setupVideoOutput(withAsset: asset)
+        self.setupAudioOutput(withAsset: asset)
+        self.setupAudioInput()
         
         // export
         
@@ -329,18 +257,15 @@ extension NextLevelSessionExporter {
         self._inputQueue = DispatchQueue(label: NextLevelSessionExporterInputQueue, autoreleaseFrequency: .workItem, target: DispatchQueue.global())
         if let inputQueue = self._inputQueue {
             
-            if let videoTracks = self.asset?.tracks(withMediaType: AVMediaType.video),
-                let videoInput = self._videoInput,
-                let videoOutput = self._videoOutput {
-                if videoTracks.count > 0 {
-                    videoInput.requestMediaDataWhenReady(on: inputQueue, using: {
-                        if self.encode(readySamplesFromReaderOutput: videoOutput, toWriterInput: videoInput) == false {
-                            videoSemaphore.signal()
-                        }
-                    })
-                } else {
-                    videoSemaphore.signal()
-                }
+            let videoTracks = asset.tracks(withMediaType: AVMediaType.video)
+            if let videoInput = self._videoInput,
+               let videoOutput = self._videoOutput,
+               videoTracks.count > 0 {
+                videoInput.requestMediaDataWhenReady(on: inputQueue, using: {
+                    if self.encode(readySamplesFromReaderOutput: videoOutput, toWriterInput: videoInput) == false {
+                        videoSemaphore.signal()
+                    }
+                })
             } else {
                 videoSemaphore.signal()
             }
@@ -380,6 +305,98 @@ extension NextLevelSessionExporter {
             
             self.complete()
             self.reset()
+        }
+    }
+    
+}
+
+// MARK: - setup funcs
+
+extension NextLevelSessionExporter {
+    
+    private func setupVideoOutput(withAsset asset: AVAsset) {
+        let videoTracks = asset.tracks(withMediaType: AVMediaType.video)
+        
+        guard videoTracks.count > 0 else {
+            return
+        }
+        
+        self._videoOutput = AVAssetReaderVideoCompositionOutput(videoTracks: videoTracks, videoSettings: self.videoInputConfiguration)
+        self._videoOutput?.alwaysCopiesSampleData = false
+        
+        if let videoComposition = self.videoComposition {
+            self._videoOutput?.videoComposition = videoComposition
+        } else {
+            self._videoOutput?.videoComposition = self.createVideoComposition()
+        }
+        
+        if let videoOutput = self._videoOutput,
+            let reader = self._reader {
+            if reader.canAdd(videoOutput) {
+                reader.add(videoOutput)
+            }
+        }
+        
+        // video input
+        if self._writer?.canApply(outputSettings: self.videoOutputConfiguration, forMediaType: AVMediaType.video) == true {
+            self._videoInput = AVAssetWriterInput(mediaType: AVMediaType.video, outputSettings: self.videoOutputConfiguration)
+            self._videoInput?.expectsMediaDataInRealTime = self.expectsMediaDataInRealTime
+        } else {
+            print("Unsupported output configuration")
+            return
+        }
+        
+        if let writer = self._writer,
+            let videoInput = self._videoInput {
+            if writer.canAdd(videoInput) {
+                writer.add(videoInput)
+            }
+            
+            // setup pixelbuffer adaptor
+            
+            var pixelBufferAttrib: [String : Any] = [:]
+            pixelBufferAttrib[kCVPixelBufferPixelFormatTypeKey as String] = NSNumber(integerLiteral: Int(kCVPixelFormatType_32RGBA))
+            if let videoComposition = self._videoOutput?.videoComposition {
+                pixelBufferAttrib[kCVPixelBufferWidthKey as String] = NSNumber(integerLiteral: Int(videoComposition.renderSize.width))
+                pixelBufferAttrib[kCVPixelBufferHeightKey as String] = NSNumber(integerLiteral: Int(videoComposition.renderSize.height))
+            }
+            pixelBufferAttrib["IOSurfaceOpenGLESTextureCompatibility"] = NSNumber(booleanLiteral:  true)
+            pixelBufferAttrib["IOSurfaceOpenGLESFBOCompatibility"] = NSNumber(booleanLiteral:  true)
+            
+            self._pixelBufferAdaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: videoInput, sourcePixelBufferAttributes: pixelBufferAttrib)
+        }
+    }
+    
+    private func setupAudioOutput(withAsset asset: AVAsset) {
+        let audioTracks = asset.tracks(withMediaType: AVMediaType.audio)
+        
+        guard audioTracks.count > 0 else {
+            self._audioOutput = nil
+            return
+        }
+
+        self._audioOutput = AVAssetReaderAudioMixOutput(audioTracks: audioTracks, audioSettings: nil)
+        self._audioOutput?.alwaysCopiesSampleData = false
+        self._audioOutput?.audioMix = self.audioMix
+        if let reader = self._reader,
+            let audioOutput = self._audioOutput {
+            if reader.canAdd(audioOutput) {
+                reader.add(audioOutput)
+            }
+        }
+    }
+    
+    private func setupAudioInput() {
+        guard let _ = self._audioOutput else {
+            return
+        }
+        
+        self._audioInput = AVAssetWriterInput(mediaType: AVMediaType.audio, outputSettings: self.audioOutputConfiguration)
+        self._audioInput?.expectsMediaDataInRealTime = self.expectsMediaDataInRealTime
+        if let writer = self._writer, let audioInput = self._audioInput {
+            if writer.canAdd(audioInput) {
+                writer.add(audioInput)
+            }
         }
     }
     
