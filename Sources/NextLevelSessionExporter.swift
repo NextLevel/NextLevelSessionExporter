@@ -45,11 +45,9 @@ public enum NextLevelSessionExporterError: Error, CustomStringConvertible {
 
 // MARK: - NextLevelSessionExporter
 
-private let NextLevelSessionExporterInputQueue = "NextLevelSessionExporterInputQueue"
-
 /// 🔄 NextLevelSessionExporter, export and transcode media in Swift
 public class NextLevelSessionExporter: NSObject {
-    
+
     /// Input asset for export, provided when initialized.
     public var asset: AVAsset?
     
@@ -116,6 +114,8 @@ public class NextLevelSessionExporter: NSObject {
     
     // private instance vars
     
+    private let InputQueueLabel = "NextLevelSessionExporterInputQueue"
+
     internal var _writer: AVAssetWriter?
     internal var _reader: AVAssetReader?
     internal var _pixelBufferAdaptor: AVAssetWriterInputPixelBufferAdaptor?
@@ -181,43 +181,37 @@ extension NextLevelSessionExporter {
     /// - Parameter completionHandler: Handler called when an export session completes.
     /// - Throws: Failure indication thrown when an error has occurred during export.
     public func export(renderHandler: RenderHandler? = nil, progressHandler: ProgressHandler? = nil, completionHandler: CompletionHandler? = nil) throws {
-        guard let asset = self.asset else {
-            print("NextLevelSessionExporter, an asset is required for encoding")
-            return
+        guard let asset = self.asset,
+              let outputURL = self.outputURL,
+              let outputFileType = self.outputFileType else {
+            print("NextLevelSessionExporter, an asset and output URL are required for encoding")
+            throw NextLevelSessionExporterError.setupFailure
         }
         
         self.cancelExport()
         
-        self._progressHandler = progressHandler
-        self._renderHandler = renderHandler
-        self._completionHandler = completionHandler
-        
-        if let outputURL = self.outputURL,
-            let outputFileType = self.outputFileType,
-            let asset = self.asset {
-            
-            do {
-                self._reader = try AVAssetReader(asset: asset)
-            } catch {
-                print("NextLevelSessionExporter, could not setup a reader for the provided asset \(asset)")
-                return
-            }
-            
-            do {
-                self._writer = try AVAssetWriter(outputURL: outputURL, fileType: outputFileType)
-            } catch {
-                print("NextLevelSessionExporter, could not setup a reader for the provided asset \(asset)")
-                return
-            }
-            
-        } else {
+        do {
+            self._reader = try AVAssetReader(asset: asset)
+        } catch {
+            print("NextLevelSessionExporter, could not setup a reader for the provided asset \(asset)")
             throw NextLevelSessionExporterError.setupFailure
         }
         
+        do {
+            self._writer = try AVAssetWriter(outputURL: outputURL, fileType: outputFileType)
+        } catch {
+            print("NextLevelSessionExporter, could not setup a reader for the provided asset \(asset)")
+            throw NextLevelSessionExporterError.setupFailure
+        }
+
         if self.validateVideoOutputConfiguration() == false {
             print("NextLevelSessionExporter, could not setup with the specified video output configuration")
             throw NextLevelSessionExporterError.setupFailure
         }
+        
+        self._progressHandler = progressHandler
+        self._renderHandler = renderHandler
+        self._completionHandler = completionHandler
         
         self._reader?.timeRange = self.timeRange
         self._writer?.shouldOptimizeForNetworkUse = self.optimizeForNetworkUse
@@ -254,7 +248,7 @@ extension NextLevelSessionExporter {
         let audioSemaphore = DispatchSemaphore(value: 0)
         let videoSemaphore = DispatchSemaphore(value: 0)
         
-        self._inputQueue = DispatchQueue(label: NextLevelSessionExporterInputQueue, autoreleaseFrequency: .workItem, target: DispatchQueue.global())
+        self._inputQueue = DispatchQueue(label: InputQueueLabel, autoreleaseFrequency: .workItem, target: DispatchQueue.global())
         if let inputQueue = self._inputQueue {
             
             let videoTracks = asset.tracks(withMediaType: AVMediaType.video)
