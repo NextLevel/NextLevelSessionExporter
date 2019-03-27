@@ -98,6 +98,8 @@ public class NextLevelSessionExporter: NSObject {
                 case.cancelled:
                     return .cancelled
                 case .unknown:
+                    fallthrough
+                @unknown default:
                     break
                 }
             }
