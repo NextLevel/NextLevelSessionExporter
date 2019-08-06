@@ -562,7 +562,7 @@ extension NextLevelSessionExporter {
             }
             self.complete()
         } else if self._reader?.status == .failed {
-            if let error = self._writer?.error {
+            if let error = self._reader?.error {
                 debugPrint("NextLevelSessionExporter, reading failed, \(error)")
             }
             self._writer?.cancelWriting()
