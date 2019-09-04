@@ -577,7 +577,7 @@ extension NextLevelSessionExporter {
     internal func complete() {
         if self._writer?.status == .failed || self._writer?.status == .cancelled {
             if let outputURL = self.outputURL {
-                if FileManager.default.fileExists(atPath: outputURL.absoluteString) == true {
+                if FileManager.default.fileExists(atPath: outputURL.absoluteString) {
                     do {
                         try FileManager.default.removeItem(at: outputURL)
                     } catch  {
