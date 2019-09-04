@@ -46,7 +46,7 @@ public enum NextLevelSessionExporterError: Error, CustomStringConvertible {
 // MARK: - NextLevelSessionExporter
 
 /// 🔄 NextLevelSessionExporter, export and transcode media in Swift
-public class NextLevelSessionExporter: NSObject {
+open class NextLevelSessionExporter: NSObject {
 
     /// Input asset for export, provided when initialized.
     public var asset: AVAsset?
@@ -116,27 +116,27 @@ public class NextLevelSessionExporter: NSObject {
     
     // private instance vars
     
-    private let InputQueueLabel = "NextLevelSessionExporterInputQueue"
+    fileprivate let InputQueueLabel = "NextLevelSessionExporterInputQueue"
 
-    internal var _writer: AVAssetWriter?
-    internal var _reader: AVAssetReader?
-    internal var _pixelBufferAdaptor: AVAssetWriterInputPixelBufferAdaptor?
+    fileprivate var _writer: AVAssetWriter?
+    fileprivate var _reader: AVAssetReader?
+    fileprivate var _pixelBufferAdaptor: AVAssetWriterInputPixelBufferAdaptor?
     
-    internal var _inputQueue: DispatchQueue?
+    fileprivate var _inputQueue: DispatchQueue?
     
-    internal var _videoOutput: AVAssetReaderVideoCompositionOutput?
-    internal var _audioOutput: AVAssetReaderAudioMixOutput?
-    internal var _videoInput: AVAssetWriterInput?
-    internal var _audioInput: AVAssetWriterInput?
+    fileprivate var _videoOutput: AVAssetReaderVideoCompositionOutput?
+    fileprivate var _audioOutput: AVAssetReaderAudioMixOutput?
+    fileprivate var _videoInput: AVAssetWriterInput?
+    fileprivate var _audioInput: AVAssetWriterInput?
     
-    internal var _progress: Float = 0
+    fileprivate var _progress: Float = 0
     
-    internal var _progressHandler: ProgressHandler?
-    internal var _renderHandler: RenderHandler?
-    internal var _completionHandler: CompletionHandler?
+    fileprivate var _progressHandler: ProgressHandler?
+    fileprivate var _renderHandler: RenderHandler?
+    fileprivate var _completionHandler: CompletionHandler?
     
-    internal var _duration: TimeInterval = 0
-    internal var _lastSamplePresentationTime: CMTime = CMTime.invalid
+    fileprivate var _duration: TimeInterval = 0
+    fileprivate var _lastSamplePresentationTime: CMTime = .invalid
     
     // MARK: - object lifecycle
     
