@@ -63,10 +63,11 @@ class ViewController: UIViewController {
             AVSampleRateKey: NSNumber(value: Float(44100))
         ]
         
-        do {
-            try exporter.export(progressHandler: { (progress) in
-                print(progress)
-            }, completionHandler: { (status) in
+        exporter.export(progressHandler: { (progress) in
+            print(progress)
+        }, completionHandler: { result in
+            switch result {
+            case .success(let status):
                 switch status {
                 case .completed:
                     print("NextLevelSessionExporter, export completed, \(exporter.outputURL?.description ?? "")")
@@ -86,10 +87,12 @@ class ViewController: UIViewController {
                     print("NextLevelSessionExporter, did not complete")
                     break
                 }
-            })
-        } catch {
-            print("NextLevelSessionExporter, failed to export")
-        }
+                break
+            case .failure(let error):
+                print("NextLevelSessionExporter, failed to export \(error)")
+                break
+            }
+        })
     }
     
     private func saveVideo(withURL url: URL) {

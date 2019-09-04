@@ -32,12 +32,21 @@ public let NextLevelSessionExporterErrorDomain = "NextLevelSessionExporterErrorD
 /// Session export errors.
 public enum NextLevelSessionExporterError: Error, CustomStringConvertible {
     case setupFailure
+    case readingFailure
+    case writingFailure
+    case cancelled
     
     public var description: String {
         get {
             switch self {
             case .setupFailure:
                 return "Setup failure"
+            case .readingFailure:
+                return "Reading failure"
+            case .writingFailure:
+                return "Writing failure"
+            case .cancelled:
+                return "Cancelled"
             }
         }
     }
@@ -122,7 +131,7 @@ open class NextLevelSessionExporter: NSObject {
     fileprivate var _reader: AVAssetReader?
     fileprivate var _pixelBufferAdaptor: AVAssetWriterInputPixelBufferAdaptor?
     
-    fileprivate var _inputQueue: DispatchQueue?
+    fileprivate var _inputQueue: DispatchQueue
     
     fileprivate var _videoOutput: AVAssetReaderVideoCompositionOutput?
     fileprivate var _audioOutput: AVAssetReaderAudioMixOutput?
@@ -149,6 +158,7 @@ open class NextLevelSessionExporter: NSObject {
     }
     
     public override init() {
+        self._inputQueue = DispatchQueue(label: InputQueueLabel, autoreleaseFrequency: .workItem, target: DispatchQueue.global())
         self.timeRange = CMTimeRange(start: CMTime.zero, end: CMTime.positiveInfinity)
         super.init()
     }
@@ -157,7 +167,6 @@ open class NextLevelSessionExporter: NSObject {
         self._writer = nil
         self._reader = nil
         self._pixelBufferAdaptor = nil
-        self._inputQueue = nil
         self._videoOutput = nil
         self._audioOutput = nil
         self._videoInput = nil
@@ -170,7 +179,7 @@ open class NextLevelSessionExporter: NSObject {
 extension NextLevelSessionExporter {
     
     /// Completion handler type for when an export finishes.
-    public typealias CompletionHandler = (_ status: AVAssetExportSession.Status) -> Void
+    public typealias CompletionHandler = (Swift.Result<AVAssetExportSession.Status, Error>) -> Void
     
     /// Progress handler type
     public typealias ProgressHandler = (_ progress: Float) -> Void
@@ -182,12 +191,15 @@ extension NextLevelSessionExporter {
     ///
     /// - Parameter completionHandler: Handler called when an export session completes.
     /// - Throws: Failure indication thrown when an error has occurred during export.
-    public func export(renderHandler: RenderHandler? = nil, progressHandler: ProgressHandler? = nil, completionHandler: CompletionHandler? = nil) throws {
+    public func export(renderHandler: RenderHandler? = nil, progressHandler: ProgressHandler? = nil, completionHandler: CompletionHandler? = nil) {
         guard let asset = self.asset,
               let outputURL = self.outputURL,
               let outputFileType = self.outputFileType else {
             print("NextLevelSessionExporter, an asset and output URL are required for encoding")
-            throw NextLevelSessionExporterError.setupFailure
+            DispatchQueue.main.async {
+                self._completionHandler?(.failure(NextLevelSessionExporterError.setupFailure))
+            }
+            return
         }
         
         self.cancelExport()
@@ -196,19 +208,25 @@ extension NextLevelSessionExporter {
             self._reader = try AVAssetReader(asset: asset)
         } catch {
             print("NextLevelSessionExporter, could not setup a reader for the provided asset \(asset)")
-            throw NextLevelSessionExporterError.setupFailure
+            DispatchQueue.main.async {
+                self._completionHandler?(.failure(NextLevelSessionExporterError.setupFailure))
+            }
         }
         
         do {
             self._writer = try AVAssetWriter(outputURL: outputURL, fileType: outputFileType)
         } catch {
             print("NextLevelSessionExporter, could not setup a reader for the provided asset \(asset)")
-            throw NextLevelSessionExporterError.setupFailure
+            DispatchQueue.main.async {
+                self._completionHandler?(.failure(NextLevelSessionExporterError.setupFailure))
+            }
         }
 
         if self.validateVideoOutputConfiguration() == false {
             print("NextLevelSessionExporter, could not setup with the specified video output configuration")
-            throw NextLevelSessionExporterError.setupFailure
+            DispatchQueue.main.async {
+                self._completionHandler?(.failure(NextLevelSessionExporterError.setupFailure))
+            }
         }
         
         self._progressHandler = progressHandler
@@ -249,48 +267,43 @@ extension NextLevelSessionExporter {
         
         let audioSemaphore = DispatchSemaphore(value: 0)
         let videoSemaphore = DispatchSemaphore(value: 0)
-        
-        self._inputQueue = DispatchQueue(label: InputQueueLabel, autoreleaseFrequency: .workItem, target: DispatchQueue.global())
-        if let inputQueue = self._inputQueue {
-            
-            let videoTracks = asset.tracks(withMediaType: AVMediaType.video)
-            if let videoInput = self._videoInput,
-               let videoOutput = self._videoOutput,
-               videoTracks.count > 0 {
-                videoInput.requestMediaDataWhenReady(on: inputQueue, using: {
-                    if self.encode(readySamplesFromReaderOutput: videoOutput, toWriterInput: videoInput) == false {
-                        videoSemaphore.signal()
-                    }
-                })
-            } else {
-                videoSemaphore.signal()
-            }
-            
-            if let audioInput = self._audioInput,
-                let audioOutput = self._audioOutput {
-                audioInput.requestMediaDataWhenReady(on: inputQueue, using: {
-                    if self.encode(readySamplesFromReaderOutput: audioOutput, toWriterInput: audioInput) == false {
-                        audioSemaphore.signal()
-                    }
-                })
-            } else {
-                audioSemaphore.signal()
-            }
-            
-            DispatchQueue.global().async {
-                audioSemaphore.wait()
-                videoSemaphore.wait()
-                DispatchQueue.main.sync {
-                    self.finish()
+    
+        let videoTracks = asset.tracks(withMediaType: AVMediaType.video)
+        if let videoInput = self._videoInput,
+           let videoOutput = self._videoOutput,
+           videoTracks.count > 0 {
+            videoInput.requestMediaDataWhenReady(on: self._inputQueue, using: {
+                if self.encode(readySamplesFromReaderOutput: videoOutput, toWriterInput: videoInput) == false {
+                    videoSemaphore.signal()
                 }
+            })
+        } else {
+            videoSemaphore.signal()
+        }
+        
+        if let audioInput = self._audioInput,
+            let audioOutput = self._audioOutput {
+            audioInput.requestMediaDataWhenReady(on: self._inputQueue, using: {
+                if self.encode(readySamplesFromReaderOutput: audioOutput, toWriterInput: audioInput) == false {
+                    audioSemaphore.signal()
+                }
+            })
+        } else {
+            audioSemaphore.signal()
+        }
+        
+        DispatchQueue.global().async {
+            audioSemaphore.wait()
+            videoSemaphore.wait()
+            DispatchQueue.main.async {
+                self.finish()
             }
-            
         }
     }
     
     /// Cancels any export in progress.
     public func cancelExport() {
-        self._inputQueue?.async {
+        self._inputQueue.async {
             if self._writer?.status == .writing {
                 self._writer?.cancelWriting()
             }
@@ -299,8 +312,10 @@ extension NextLevelSessionExporter {
                 self._reader?.cancelReading()
             }
             
-            self.complete()
-            self.reset()
+            DispatchQueue.main.async {
+                self.complete()
+                self.reset()
+            }
         }
     }
     
@@ -551,20 +566,14 @@ extension NextLevelSessionExporter {
         self._progressHandler?(progress)
     }
     
+    // always called on the main thread
     internal func finish() {
         if self._reader?.status == .cancelled || self._writer?.status == .cancelled {
-            return
-        }
-        
-        if self._writer?.status == .failed {
-            if let error = self._writer?.error {
-                debugPrint("NextLevelSessionExporter, writing failed, \(error)")
-            }
+            self.complete()
+        } else if self._writer?.status == .failed {
+            self._reader?.cancelReading()
             self.complete()
         } else if self._reader?.status == .failed {
-            if let error = self._reader?.error {
-                debugPrint("NextLevelSessionExporter, reading failed, \(error)")
-            }
             self._writer?.cancelWriting()
             self.complete()
         } else {
@@ -574,20 +583,62 @@ extension NextLevelSessionExporter {
         }
     }
     
+    // always called on the main thread
     internal func complete() {
-        if self._writer?.status == .failed || self._writer?.status == .cancelled {
-            if let outputURL = self.outputURL {
-                if FileManager.default.fileExists(atPath: outputURL.absoluteString) {
-                    do {
-                        try FileManager.default.removeItem(at: outputURL)
-                    } catch  {
-                        debugPrint("NextLevelSessionExporter, failed to delete file at \(outputURL)")
-                    }
-                }
+        if self._reader?.status == .cancelled || self._writer?.status == .cancelled {
+            guard let outputURL = self.outputURL else {
+                self._completionHandler?(.failure(NextLevelSessionExporterError.cancelled))
+                return
+            }
+            if FileManager.default.fileExists(atPath: outputURL.absoluteString) {
+                try? FileManager.default.removeItem(at: outputURL)
+                self._completionHandler?(.failure(NextLevelSessionExporterError.cancelled))
             }
         }
         
-        self._completionHandler?(self.status)
+        guard let reader = self._reader else {
+            self._completionHandler?(.failure(NextLevelSessionExporterError.setupFailure))
+            self._completionHandler = nil
+            return
+        }
+        
+        guard let writer = self._writer else {
+            self._completionHandler?(.failure(NextLevelSessionExporterError.setupFailure))
+            self._completionHandler = nil
+            return
+        }
+        
+        switch reader.status {
+        case AVAssetReader.Status.failed:
+            guard let outputURL = self.outputURL else {
+                self._completionHandler?(.failure(writer.error ?? NextLevelSessionExporterError.readingFailure))
+                return
+            }
+            if FileManager.default.fileExists(atPath: outputURL.absoluteString) {
+                try? FileManager.default.removeItem(at: outputURL)
+                self._completionHandler?(.failure(writer.error ?? NextLevelSessionExporterError.readingFailure))
+            }
+            break
+        default:
+            break
+        }
+        
+        switch writer.status {
+        case AVAssetWriter.Status.failed:
+            guard let outputURL = self.outputURL else {
+                self._completionHandler?(.failure(writer.error ?? NextLevelSessionExporterError.writingFailure))
+                return
+            }
+            if FileManager.default.fileExists(atPath: outputURL.absoluteString) {
+                try? FileManager.default.removeItem(at: outputURL)
+                self._completionHandler?(.failure(writer.error ?? NextLevelSessionExporterError.writingFailure))
+            }
+            break
+        default:
+            break
+        }
+
+        self._completionHandler?(.success(self.status))
         self._completionHandler = nil
     }
     
@@ -612,7 +663,6 @@ extension NextLevelSessionExporter {
         self._reader = nil
         self._pixelBufferAdaptor = nil
         
-        self._inputQueue = nil
         self._videoOutput = nil
         self._audioOutput = nil
         self._videoInput = nil
@@ -653,7 +703,7 @@ extension AVAsset {
         exporter.outputURL = outputURL
         exporter.videoOutputConfiguration = videoOutputConfiguration
         exporter.audioOutputConfiguration = audioOutputConfiguration
-        try? exporter.export(progressHandler: progressHandler, completionHandler: completionHandler)
+        exporter.export(progressHandler: progressHandler, completionHandler: completionHandler)
     }
     
 }
