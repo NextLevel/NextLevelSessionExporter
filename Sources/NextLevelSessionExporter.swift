@@ -225,7 +225,7 @@ extension NextLevelSessionExporter {
         if self.timeRange.duration.isValid && self.timeRange.duration.isPositiveInfinity == false {
             self._duration = CMTimeGetSeconds(self.timeRange.duration)
         } else {
-            self._duration = CMTimeGetSeconds(self.asset!.duration)
+            self._duration = CMTimeGetSeconds(asset.duration)
         }
         
         if self.videoOutputConfiguration?.keys.contains(AVVideoCodecKey) == false {
