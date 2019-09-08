@@ -6,6 +6,34 @@
       "symbol": "NextLevelSessionExporterError.setupFailure",
       "symbol_kind": "source.lang.swift.decl.enumelement",
       "warning": "undocumented"
+    },
+    {
+      "file": "/Users/piemonte/Source/NextLevelSessionExporter/Sources/NextLevelSessionExporter.swift",
+      "line": 35,
+      "symbol": "NextLevelSessionExporterError.readingFailure",
+      "symbol_kind": "source.lang.swift.decl.enumelement",
+      "warning": "undocumented"
+    },
+    {
+      "file": "/Users/piemonte/Source/NextLevelSessionExporter/Sources/NextLevelSessionExporter.swift",
+      "line": 36,
+      "symbol": "NextLevelSessionExporterError.writingFailure",
+      "symbol_kind": "source.lang.swift.decl.enumelement",
+      "warning": "undocumented"
+    },
+    {
+      "file": "/Users/piemonte/Source/NextLevelSessionExporter/Sources/NextLevelSessionExporter.swift",
+      "line": 37,
+      "symbol": "NextLevelSessionExporterError.cancelled",
+      "symbol_kind": "source.lang.swift.decl.enumelement",
+      "warning": "undocumented"
+    },
+    {
+      "file": "/Users/piemonte/Source/NextLevelSessionExporter/Sources/NextLevelSessionExporter.swift",
+      "line": 160,
+      "symbol": "NextLevelSessionExporter.init()",
+      "symbol_kind": "source.lang.swift.decl.function.method.instance",
+      "warning": "undocumented"
     }
   ],
   "source_directory": "/Users/piemonte/Source/NextLevelSessionExporter"

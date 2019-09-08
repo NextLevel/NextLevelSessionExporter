@@ -13,7 +13,7 @@
     <a title="SessionExporter  Reference"></a>
     <header>
       <div class="content-wrapper">
-        <p><a href="index.html">SessionExporter Docs</a> (96% documented)</p>
+        <p><a href="index.html">SessionExporter Docs</a> (83% documented)</p>
         <p class="header-right"><a href="https://github.com/NextLevel/NextLevelSessionExporter"><img src="img/gh.png"/>View on GitHub</a></p>
       </div>
     </header>
@@ -69,7 +69,7 @@
 
 <p><code><a href="Classes/NextLevelSessionExporter.html">NextLevelSessionExporter</a></code> is an export and transcode media library for iOS written in <a href="https://developer.apple.com/swift/">Swift</a>.</p>
 
-<p><a href="https://travis-ci.org/NextLevel/NextLevelSessionExporter"><img src="https://travis-ci.org/NextLevel/NextLevelSessionExporter.svg?branch=master" alt="Build Status"></a> <a href="http://cocoadocs.org/docsets/NextLevelSessionExporter/"><img src="https://img.shields.io/cocoapods/v/NextLevelSessionExporter.svg?style=flat" alt="Pod Version"></a> <a href="https://developer.apple.com/swift"><img src="https://img.shields.io/badge/language-swift%204.2-brightgreen.svg" alt="Swift Version"></a> <a href="https://github.com/NextLevel/NextLevelSessionExporter/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-MIT-lightgrey.svg" alt="GitHub license"></a></p>
+<p><a href="https://travis-ci.org/NextLevel/NextLevelSessionExporter"><img src="https://travis-ci.org/NextLevel/NextLevelSessionExporter.svg?branch=master" alt="Build Status"></a> <a href="http://cocoadocs.org/docsets/NextLevelSessionExporter/"><img src="https://img.shields.io/cocoapods/v/NextLevelSessionExporter.svg?style=flat" alt="Pod Version"></a> <a href="https://developer.apple.com/swift"><img src="https://img.shields.io/badge/language-swift%205.0-brightgreen.svg" alt="Swift Version"></a> <a href="https://github.com/NextLevel/NextLevelSessionExporter/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-MIT-lightgrey.svg" alt="GitHub license"></a></p>
 
 <p>The library provides customizable audio and video encoding options unlike <code>AVAssetExportSession</code> and without having to learn the intricacies of AVFoundation. It was a port of <a href="https://github.com/rs/SDAVAssetExportSession">SDAVAssetExportSession</a> with inspiration from <a href="https://github.com/rFlex/SCRecorder/blob/master/Library/Sources/SCAssetExportSession.h">SCAssetExportSession</a> – which are great obj-c alternatives.</p>
 
@@ -81,18 +81,19 @@
 <p>Need a different version of Swift?</p>
 
 <ul>
-<li><code>4.2</code> - Target your Podfile to the latest release or master</li>
+<li><code>5.0</code> - Target your Podfile to the latest release or master</li>
+<li><code>4.2</code> - Target your Podfile to the <code>swift4.2</code> branch</li>
 <li><code>4.0</code> - Target your Podfile to the <code>swift4.0</code> branch</li>
 </ul>
 <h2 id='quick-start' class='heading'>Quick Start</h2>
 <pre class="highlight ruby"><code>
 <span class="c1"># CocoaPods</span>
 
-<span class="n">pod</span> <span class="s2">"NextLevelSessionExporter"</span><span class="p">,</span> <span class="s2">"~&gt; 0.2.0"</span>
+<span class="n">pod</span> <span class="s2">"NextLevelSessionExporter"</span><span class="p">,</span> <span class="s2">"~&gt; 0.4.0"</span>
 
 <span class="c1"># Carthage</span>
 
-<span class="n">github</span> <span class="s2">"nextlevel/NextLevelSessionExporter"</span> <span class="o">~&gt;</span> <span class="mi">0</span><span class="o">.</span><span class="mi">2</span><span class="o">.</span><span class="mi">0</span>
+<span class="n">github</span> <span class="s2">"nextlevel/NextLevelSessionExporter"</span> <span class="o">~&gt;</span> <span class="mf">0.4</span><span class="o">.</span><span class="mi">0</span>
 
 <span class="c1"># Swift PM</span>
 
@@ -132,7 +133,7 @@ let audioOutputConfig = [
 ]
 
 let asset = AVAsset(url: Bundle.main.url(forResource: "TestVideo", withExtension: "mov")!)
-asset.nextlevel_export.nextlevel_export(outputURL: tmpURL, videoOutputConfiguration: videoOutputConfig, audioOutputConfiguration: audioOutputConfig)
+asset.nextlevel_export(outputURL: tmpURL, videoOutputConfiguration: videoOutputConfig, audioOutputConfiguration: audioOutputConfig)
 </code></pre>
 
 <p>Alternatively, you can use <code><a href="Classes/NextLevelSessionExporter.html">NextLevelSessionExporter</a></code> directly.</p>
@@ -161,22 +162,25 @@ exporter.audioOutputConfiguration = [
     AVSampleRateKey: NSNumber(value: Float(44100))
 ]
 
-do {
-    try exporter.export(completionHandler: { (status) in                
+exporter.export(progressHandler: { (progress) in
+    print(progress)
+}, completionHandler: { result in
+    switch result {
+    case .success(let status):
         switch status {
         case .completed:
-            print("video export completed")
-            break
-        case .cancelled:
-            print("video export cancelled")
+            print("NextLevelSessionExporter, export completed, \(exporter.outputURL?.description ?? "")")
             break
         default:
+            print("NextLevelSessionExporter, did not complete")
             break
         }
-    })
-} catch {
-    print("failed to export")
-}
+        break
+    case .failure(let error):
+        print("NextLevelSessionExporter, failed to export \(error)")
+        break
+    }
+})
 </code></pre>
 <h2 id='documentation' class='heading'>Documentation</h2>
 
@@ -204,8 +208,8 @@ do {
           </section>
         </section>
         <section id="footer">
-          <p>&copy; 2018 <a class="link" href="http://nextlevel.engineering" target="_blank" rel="external">Patrick Piemonte</a>. All rights reserved. (Last updated: 2018-09-12)</p>
-          <p>Generated by <a class="link" href="https://github.com/realm/jazzy" target="_blank" rel="external">jazzy ♪♫ v0.8.4</a>, a <a class="link" href="http://realm.io" target="_blank" rel="external">Realm</a> project.</p>
+          <p>&copy; 2019 <a class="link" href="http://nextlevel.engineering" target="_blank" rel="external">Patrick Piemonte</a>. All rights reserved. (Last updated: 2019-09-08)</p>
+          <p>Generated by <a class="link" href="https://github.com/realm/jazzy" target="_blank" rel="external">jazzy ♪♫ v0.9.6</a>, a <a class="link" href="https://realm.io" target="_blank" rel="external">Realm</a> project.</p>
         </section>
       </article>
     </div>
