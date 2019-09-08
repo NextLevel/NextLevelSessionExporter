@@ -592,8 +592,8 @@ extension NextLevelSessionExporter {
             }
             if FileManager.default.fileExists(atPath: outputURL.absoluteString) {
                 try? FileManager.default.removeItem(at: outputURL)
-                self._completionHandler?(.failure(NextLevelSessionExporterError.cancelled))
             }
+            self._completionHandler?(.failure(NextLevelSessionExporterError.cancelled))
         }
         
         guard let reader = self._reader else {
@@ -616,10 +616,11 @@ extension NextLevelSessionExporter {
             }
             if FileManager.default.fileExists(atPath: outputURL.absoluteString) {
                 try? FileManager.default.removeItem(at: outputURL)
-                self._completionHandler?(.failure(writer.error ?? NextLevelSessionExporterError.readingFailure))
             }
+            self._completionHandler?(.failure(writer.error ?? NextLevelSessionExporterError.readingFailure))
             break
         default:
+            // do nothing
             break
         }
         
@@ -631,10 +632,11 @@ extension NextLevelSessionExporter {
             }
             if FileManager.default.fileExists(atPath: outputURL.absoluteString) {
                 try? FileManager.default.removeItem(at: outputURL)
-                self._completionHandler?(.failure(writer.error ?? NextLevelSessionExporterError.writingFailure))
             }
+            self._completionHandler?(.failure(writer.error ?? NextLevelSessionExporterError.writingFailure))
             break
         default:
+            // do nothing
             break
         }
 
@@ -650,7 +652,7 @@ extension NextLevelSessionExporter {
                 return false
             }
             
-            // TODO add more checks when needed
+            // TODO add more checks if needed
             
             return true
         }

@@ -73,16 +73,6 @@ class ViewController: UIViewController {
                     print("NextLevelSessionExporter, export completed, \(exporter.outputURL?.description ?? "")")
                     self.saveVideo(withURL: exporter.outputURL!)
                     break
-                case .cancelled:
-                    print("NextLevelSessionExporter, export cancelled")
-                    break
-                case .failed:
-                    print("NextLevelSessionExporter, failed to export")
-                    break
-                case .exporting:
-                    fallthrough
-                case .waiting:
-                    fallthrough
                 default:
                     print("NextLevelSessionExporter, did not complete")
                     break
