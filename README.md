@@ -21,11 +21,11 @@ Need a different version of Swift?
 
 # CocoaPods
 
-pod "NextLevelSessionExporter", "~> 0.3.0"
+pod "NextLevelSessionExporter", "~> 0.4.0"
 
 # Carthage
 
-github "nextlevel/NextLevelSessionExporter" ~> 0.3.0
+github "nextlevel/NextLevelSessionExporter" ~> 0.4.0
 
 # Swift PM
 
@@ -68,7 +68,7 @@ let audioOutputConfig = [
 ]
 
 let asset = AVAsset(url: Bundle.main.url(forResource: "TestVideo", withExtension: "mov")!)
-asset.nextlevel_export.nextlevel_export(outputURL: tmpURL, videoOutputConfiguration: videoOutputConfig, audioOutputConfiguration: audioOutputConfig)
+asset.nextlevel_export(outputURL: tmpURL, videoOutputConfiguration: videoOutputConfig, audioOutputConfiguration: audioOutputConfig)
 ```
 
 Alternatively, you can use `NextLevelSessionExporter` directly.
@@ -99,22 +99,25 @@ exporter.audioOutputConfiguration = [
     AVSampleRateKey: NSNumber(value: Float(44100))
 ]
 
-do {
-    try exporter.export(completionHandler: { (status) in                
+exporter.export(progressHandler: { (progress) in
+    print(progress)
+}, completionHandler: { result in
+    switch result {
+    case .success(let status):
         switch status {
         case .completed:
-            print("video export completed")
-            break
-        case .cancelled:
-            print("video export cancelled")
+            print("NextLevelSessionExporter, export completed, \(exporter.outputURL?.description ?? "")")
             break
         default:
+            print("NextLevelSessionExporter, did not complete")
             break
         }
-    })
-} catch {
-    print("failed to export")
-}
+        break
+    case .failure(let error):
+        print("NextLevelSessionExporter, failed to export \(error)")
+        break
+    }
+})
 ```
 
 ## Documentation
