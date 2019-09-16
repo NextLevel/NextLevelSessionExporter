@@ -420,20 +420,15 @@ extension NextLevelSessionExporter {
     // called on the inputQueue
     internal func encode(readySamplesFromReaderOutput output: AVAssetReaderOutput, toWriterInput input: AVAssetWriterInput) -> Bool {
         while input.isReadyForMoreMediaData {
-            guard let sampleBuffer = output.copyNextSampleBuffer() else {
+            guard self._reader?.status == .reading && self._writer?.status == .writing,
+                  let sampleBuffer = output.copyNextSampleBuffer() else {
                 input.markAsFinished()
                 return false
             }
             
             var handled = false
             var error = false
-            
-            if self._reader?.status != .reading || self._writer?.status != .writing {
-                handled = true
-                error = true
-            }
-            
-            if handled == false && self._videoOutput == output {
+            if self._videoOutput == output {
                 // determine progress
                 self._lastSamplePresentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer) - self.timeRange.start
                 let progress = self._duration == 0 ? 1 : Float(CMTimeGetSeconds(self._lastSamplePresentationTime) / self._duration)
@@ -470,7 +465,6 @@ extension NextLevelSessionExporter {
     }
     
     internal func createVideoComposition() -> AVMutableVideoComposition {
-        
         let videoComposition = AVMutableVideoComposition()
         
         if let asset = self.asset,
