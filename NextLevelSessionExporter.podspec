@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name = 'NextLevelSessionExporter'
-  s.version = '0.4.0'
+  s.version = '0.4.1'
   s.license = 'MIT'
   s.summary = 'Export and transcode media in Swift'
   s.homepage = 'https://github.com/nextlevel/NextLevelSessionExporter'
