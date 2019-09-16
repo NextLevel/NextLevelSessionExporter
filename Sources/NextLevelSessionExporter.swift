@@ -420,50 +420,49 @@ extension NextLevelSessionExporter {
     // called on the inputQueue
     internal func encode(readySamplesFromReaderOutput output: AVAssetReaderOutput, toWriterInput input: AVAssetWriterInput) -> Bool {
         while input.isReadyForMoreMediaData {
-            if let sampleBuffer = output.copyNextSampleBuffer() {
-                var handled = false
-                var error = false
+            guard let sampleBuffer = output.copyNextSampleBuffer() else {
+                input.markAsFinished()
+                return false
+            }
+            
+            var handled = false
+            var error = false
+            
+            if self._reader?.status != .reading || self._writer?.status != .writing {
+                handled = true
+                error = true
+            }
+            
+            if handled == false && self._videoOutput == output {
+                // determine progress
+                self._lastSamplePresentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer) - self.timeRange.start
+                let progress = self._duration == 0 ? 1 : Float(CMTimeGetSeconds(self._lastSamplePresentationTime) / self._duration)
+                self.updateProgress(progress: progress)
                 
-                if self._reader?.status != .reading || self._writer?.status != .writing {
-                    handled = true
-                    error = true
-                }
-                
-                if handled == false && self._videoOutput == output {
-                    // determine progress
-                    self._lastSamplePresentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer) - self.timeRange.start
-                    let progress = self._duration == 0 ? 1 : Float(CMTimeGetSeconds(self._lastSamplePresentationTime) / self._duration)
-                    self.updateProgress(progress: progress)
+                // prepare progress frames
+                if let pixelBufferAdaptor = self._pixelBufferAdaptor,
+                    let pixelBufferPool = pixelBufferAdaptor.pixelBufferPool,
+                    let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
                     
-                    // prepare progress frames
-                    if let pixelBufferAdaptor = self._pixelBufferAdaptor,
-                        let pixelBufferPool = pixelBufferAdaptor.pixelBufferPool,
-                        let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
-                        
-                        var toRenderBuffer: CVPixelBuffer? = nil
-                        let result = CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pixelBufferPool, &toRenderBuffer)
-                        if result == kCVReturnSuccess {
-                            if let toBuffer = toRenderBuffer {
-                                self._renderHandler?(pixelBuffer, self._lastSamplePresentationTime, toBuffer)
-                                if pixelBufferAdaptor.append(toBuffer, withPresentationTime:self._lastSamplePresentationTime) == false {
-                                    error = true
-                                }
-                                handled = true
+                    var toRenderBuffer: CVPixelBuffer? = nil
+                    let result = CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pixelBufferPool, &toRenderBuffer)
+                    if result == kCVReturnSuccess {
+                        if let toBuffer = toRenderBuffer {
+                            self._renderHandler?(pixelBuffer, self._lastSamplePresentationTime, toBuffer)
+                            if pixelBufferAdaptor.append(toBuffer, withPresentationTime:self._lastSamplePresentationTime) == false {
+                                error = true
                             }
+                            handled = true
                         }
                     }
                 }
-                
-                if handled == false && input.append(sampleBuffer) == false {
-                    error = true
-                }
-                
-                if error {
-                    return false
-                }
-                
-            } else {
-                input.markAsFinished()
+            }
+            
+            if handled == false && input.append(sampleBuffer) == false {
+                error = true
+            }
+            
+            if error {
                 return false
             }
         }
