@@ -22,13 +22,22 @@
 //  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //  SOFTWARE.
 //
-
+// swift-tools-version:5.0
 import PackageDescription
 
-let package = Package(name: "NextLevelSessionExporter",
-                      platforms: [.iOS(.v10)],
-                      products: [.library(name: "NextLevelSessionExporter",
-                                          targets: ["SessionExporter"])],
-                      targets: [.target(name: "SessionExporter",
-                                        path: "Sources")],
-                      swiftLanguageVersions: [.v5])
+let package = Package(
+    name: "NextLevelSessionExporter",
+    platforms: [
+      .iOS(.v10)
+    ],
+    products: [
+      .library(name: "NextLevelSessionExporter", targets: ["SessionExporter"])
+    ],
+    targets: [
+      .target(
+          name: "SessionExporter",
+          path: "Sources"
+      )
+    ],
+    swiftLanguageVersions: [.v5]
+)
