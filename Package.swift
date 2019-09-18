@@ -25,6 +25,10 @@
 
 import PackageDescription
 
-let package = Package(
-    name: "NextLevelSessionExporter"
-)
+let package = Package(name: "NextLevelSessionExporter",
+                      platforms: [.iOS(.v10)],
+                      products: [.library(name: "NextLevelSessionExporter",
+                                          targets: ["SessionExporter"])],
+                      targets: [.target(name: "SessionExporter",
+                                        path: "Sources")],
+                      swiftLanguageVersions: [.v5])
