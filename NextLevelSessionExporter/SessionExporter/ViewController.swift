@@ -74,7 +74,7 @@ class ViewController: UIViewController {
                     self.saveVideo(withURL: exporter.outputURL!)
                     break
                 default:
-                    print("NextLevelSessionExporter, did not complete")
+                    print("NextLevelSessionExporter, did not complete \(status)")
                     break
                 }
                 break
