@@ -587,6 +587,7 @@ extension NextLevelSessionExporter {
                 try? FileManager.default.removeItem(at: outputURL)
             }
             self._completionHandler?(.failure(NextLevelSessionExporterError.cancelled))
+            return
         }
         
         guard let reader = self._reader else {
@@ -602,23 +603,23 @@ extension NextLevelSessionExporter {
         }
         
         switch reader.status {
-        case AVAssetReader.Status.failed:
+        case .failed:
             guard let outputURL = self.outputURL else {
-                self._completionHandler?(.failure(writer.error ?? NextLevelSessionExporterError.readingFailure))
+                self._completionHandler?(.failure(reader.error ?? NextLevelSessionExporterError.readingFailure))
                 return
             }
             if FileManager.default.fileExists(atPath: outputURL.absoluteString) {
                 try? FileManager.default.removeItem(at: outputURL)
             }
-            self._completionHandler?(.failure(writer.error ?? NextLevelSessionExporterError.readingFailure))
-            break
+            self._completionHandler?(.failure(reader.error ?? NextLevelSessionExporterError.readingFailure))
+            return
         default:
             // do nothing
             break
         }
         
         switch writer.status {
-        case AVAssetWriter.Status.failed:
+        case .failed:
             guard let outputURL = self.outputURL else {
                 self._completionHandler?(.failure(writer.error ?? NextLevelSessionExporterError.writingFailure))
                 return
@@ -627,7 +628,7 @@ extension NextLevelSessionExporter {
                 try? FileManager.default.removeItem(at: outputURL)
             }
             self._completionHandler?(.failure(writer.error ?? NextLevelSessionExporterError.writingFailure))
-            break
+            return
         default:
             // do nothing
             break
