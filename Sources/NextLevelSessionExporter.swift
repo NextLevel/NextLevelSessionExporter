@@ -191,7 +191,9 @@ extension NextLevelSessionExporter {
     ///
     /// - Parameter completionHandler: Handler called when an export session completes.
     /// - Throws: Failure indication thrown when an error has occurred during export.
-    public func export(renderHandler: RenderHandler? = nil, progressHandler: ProgressHandler? = nil, completionHandler: CompletionHandler? = nil) {
+    public func export(renderHandler: RenderHandler? = nil,
+                       progressHandler: ProgressHandler? = nil,
+                       completionHandler: CompletionHandler? = nil) {
         guard let asset = self.asset,
               let outputURL = self.outputURL,
               let outputFileType = self.outputFileType else {
@@ -202,7 +204,17 @@ extension NextLevelSessionExporter {
             return
         }
         
-        self.cancelExport()
+        if self._writer?.status == .writing {
+            self._writer?.cancelWriting()
+            self._writer = nil
+        }
+        
+        if self._reader?.status == .reading {
+            self._reader?.cancelReading()
+            self._reader = nil
+        }
+        
+        self._progress = 0
         
         do {
             self._reader = try AVAssetReader(asset: asset)
