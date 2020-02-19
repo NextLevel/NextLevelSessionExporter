@@ -21,11 +21,11 @@ Need a different version of Swift?
 
 # CocoaPods
 
-pod "NextLevelSessionExporter", "~> 0.4.3"
+pod "NextLevelSessionExporter", "~> 0.4.4"
 
 # Carthage
 
-github "nextlevel/NextLevelSessionExporter" ~> 0.4.3
+github "nextlevel/NextLevelSessionExporter" ~> 0.4.4
 
 # Swift PM
 
