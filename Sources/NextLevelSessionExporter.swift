@@ -234,7 +234,8 @@ extension NextLevelSessionExporter {
             }
         }
 
-        if self.validateVideoOutputConfiguration() == false {
+        // if a video configuration exists, validate it (otherwise, proceed as audio)
+        if let _ = self.videoOutputConfiguration, self.validateVideoOutputConfiguration() == false {
             print("NextLevelSessionExporter, could not setup with the specified video output configuration")
             DispatchQueue.main.async {
                 self._completionHandler?(.failure(NextLevelSessionExporterError.setupFailure))
@@ -650,19 +651,19 @@ extension NextLevelSessionExporter {
         self._completionHandler = nil
     }
     
-    internal func validateVideoOutputConfiguration() -> Bool {
-        if let videoOutputConfiguration = self.videoOutputConfiguration {
-            let videoWidth = videoOutputConfiguration[AVVideoWidthKey] as? NSNumber
-            let videoHeight = videoOutputConfiguration[AVVideoHeightKey] as? NSNumber
-            if videoWidth == nil || videoHeight == nil {
-                return false
-            }
-            
-            // TODO add more checks if needed
-            
-            return true
+    // subclass and add more checks, if needed
+    open func validateVideoOutputConfiguration() -> Bool {
+        guard let videoOutputConfiguration = self.videoOutputConfiguration else {
+            return false
         }
-        return false
+
+        let videoWidth = videoOutputConfiguration[AVVideoWidthKey] as? NSNumber
+        let videoHeight = videoOutputConfiguration[AVVideoHeightKey] as? NSNumber
+        if videoWidth == nil || videoHeight == nil {
+            return false
+        }
+                
+        return true
     }
     
     internal func reset() {
