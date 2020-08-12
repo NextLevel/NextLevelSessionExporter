@@ -26,9 +26,6 @@ import AVFoundation
 
 // MARK: - types
 
-/// Session export error domain.
-public let NextLevelSessionExporterErrorDomain = "NextLevelSessionExporterErrorDomain"
-
 /// Session export errors.
 public enum NextLevelSessionExporterError: Error, CustomStringConvertible {
     case setupFailure
