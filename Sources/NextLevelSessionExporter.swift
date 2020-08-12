@@ -451,7 +451,8 @@ extension NextLevelSessionExporter {
                     
                     var toRenderBuffer: CVPixelBuffer? = nil
                     let result = CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pixelBufferPool, &toRenderBuffer)
-                    if result == kCVReturnSuccess {
+                    switch result {
+                    case kCVReturnSuccess:
                         if let toBuffer = toRenderBuffer {
                             self._renderHandler?(pixelBuffer, self._lastSamplePresentationTime, toBuffer)
                             if pixelBufferAdaptor.append(toBuffer, withPresentationTime:self._lastSamplePresentationTime) == false {
@@ -459,6 +460,11 @@ extension NextLevelSessionExporter {
                             }
                             handled = true
                         }
+                        break
+                    default:
+//                        debugPrint("result, \(result)")
+                        error = true
+                        break
                     }
                 }
             }
