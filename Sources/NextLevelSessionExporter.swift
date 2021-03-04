@@ -529,22 +529,6 @@ extension NextLevelSessionExporter {
                 }
                 videoComposition.renderSize = naturalSize
                 
-                // center the video
-                
-                var ratio: CGFloat = 0
-                let xRatio: CGFloat = targetSize.width / naturalSize.width
-                let yRatio: CGFloat = targetSize.height / naturalSize.height
-                ratio = min(xRatio, yRatio)
-                
-                let postWidth = naturalSize.width * ratio
-                let postHeight = naturalSize.height * ratio
-                let transX = (targetSize.width - postWidth) * 0.5
-                let transY = (targetSize.height - postHeight) * 0.5
-                
-                var matrix = CGAffineTransform(translationX: (transX / xRatio), y: (transY / yRatio))
-                matrix = matrix.scaledBy(x: (ratio / xRatio), y: (ratio / yRatio))
-                transform = transform.concatenating(matrix)
-                
                 // make the composition
                 
                 let compositionInstruction = AVMutableVideoCompositionInstruction()
