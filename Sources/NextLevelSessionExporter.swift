@@ -453,11 +453,21 @@ extension NextLevelSessionExporter {
                     let result = CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pixelBufferPool, &toRenderBuffer)
                     if result == kCVReturnSuccess {
                         if let toBuffer = toRenderBuffer {
-                            self._renderHandler?(pixelBuffer, self._lastSamplePresentationTime, toBuffer)
-                            if pixelBufferAdaptor.append(toBuffer, withPresentationTime:self._lastSamplePresentationTime) == false {
-                                error = true
+                            // if _renderHandler is nil, then we can save time by just passing pixelBuffer directly to pixelBufferAdaptor.append
+                            if (self._renderHandler == nil) {
+                                if pixelBufferAdaptor.append(pixelBuffer, withPresentationTime:self._lastSamplePresentationTime) == false {
+                                    error = true
+                                }
+                                handled = true
                             }
-                            handled = true
+                            // otherwise, we need to call into _renderHandler to preprocess the frames
+                            else {
+                                self._renderHandler?(pixelBuffer, self._lastSamplePresentationTime, toBuffer)
+                                if pixelBufferAdaptor.append(toBuffer, withPresentationTime:self._lastSamplePresentationTime) == false {
+                                    error = true
+                                }
+                                handled = true
+                            }
                         }
                     }
                 }
