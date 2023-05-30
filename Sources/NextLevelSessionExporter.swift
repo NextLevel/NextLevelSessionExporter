@@ -90,8 +90,7 @@ open class NextLevelSessionExporter: NSObject {
     /// Audio output configuration dictionary, using keys defined in `<AVFoundation/AVAudioSettings.h>`
     public var audioOutputConfiguration: [String : Any]?
     
-    /// Assign custom priority on global dispatch queue
-    public var qos: DispatchQoS.QoSClass = .default
+    
     
     /// Export session status state.
     public var status: AVAssetExportSession.Status {
@@ -132,6 +131,8 @@ open class NextLevelSessionExporter: NSObject {
     fileprivate var _pixelBufferAdaptor: AVAssetWriterInputPixelBufferAdaptor?
     
     fileprivate var _inputQueue: DispatchQueue
+    /// Assign custom priority on global dispatch queue
+    fileprivate var _qos: DispatchQoS.QoSClass
     
     fileprivate var _videoOutput: AVAssetReaderVideoCompositionOutput?
     fileprivate var _audioOutput: AVAssetReaderAudioMixOutput?
@@ -152,13 +153,21 @@ open class NextLevelSessionExporter: NSObject {
     /// Initializes a session with an asset to export.
     ///
     /// - Parameter asset: The asset to export.
-    public convenience init(withAsset asset: AVAsset) {
-        self.init()
+    public convenience init(withAsset asset: AVAsset, qos: DispatchQoS.QoSClass = .default) {
+        self.init(qos: qos)
         self.asset = asset
     }
     
+    public init(qos: DispatchQoS.QoSClass) {
+        self._qos = qos
+        self._inputQueue = DispatchQueue(label: InputQueueLabel, autoreleaseFrequency: .workItem, target: DispatchQueue.global(qos: _qos))
+        self.timeRange = CMTimeRange(start: CMTime.zero, end: CMTime.positiveInfinity)
+        super.init()
+    }
+    
     public override init() {
-        self._inputQueue = DispatchQueue(label: InputQueueLabel, autoreleaseFrequency: .workItem, target: DispatchQueue.global())
+        self._qos = .default
+        self._inputQueue = DispatchQueue(label: InputQueueLabel, autoreleaseFrequency: .workItem, target: DispatchQueue.global(qos: _qos))
         self.timeRange = CMTimeRange(start: CMTime.zero, end: CMTime.positiveInfinity)
         super.init()
     }
@@ -305,7 +314,7 @@ extension NextLevelSessionExporter {
             audioSemaphore.signal()
         }
         
-        DispatchQueue.global(qos: qos).async {
+        DispatchQueue.global(qos: _qos).async {
             audioSemaphore.wait()
             videoSemaphore.wait()
             DispatchQueue.main.async {
