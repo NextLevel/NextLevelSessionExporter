@@ -90,6 +90,9 @@ open class NextLevelSessionExporter: NSObject {
     /// Audio output configuration dictionary, using keys defined in `<AVFoundation/AVAudioSettings.h>`
     public var audioOutputConfiguration: [String : Any]?
     
+    /// Assign custom priority on global dispatch queue
+    public var qos: DispatchQoS.QoSClass = .default
+    
     /// Export session status state.
     public var status: AVAssetExportSession.Status {
         get {
@@ -302,7 +305,7 @@ extension NextLevelSessionExporter {
             audioSemaphore.signal()
         }
         
-        DispatchQueue.global().async {
+        DispatchQueue.global(qos: qos).async {
             audioSemaphore.wait()
             videoSemaphore.wait()
             DispatchQueue.main.async {
