@@ -275,36 +275,35 @@ extension NextLevelSessionExporter {
         self._reader?.startReading()
         self._writer?.startSession(atSourceTime: self.timeRange.start)
         
-        let audioSemaphore = DispatchSemaphore(value: 0)
-        let videoSemaphore = DispatchSemaphore(value: 0)
+        let dispatchGroup = DispatchGroup()
     
         let videoTracks = asset.tracks(withMediaType: AVMediaType.video)
         if let videoInput = self._videoInput,
            let videoOutput = self._videoOutput,
            videoTracks.count > 0 {
+            dispatchGroup.enter()
             videoInput.requestMediaDataWhenReady(on: self._inputQueue, using: {
                 if self.encode(readySamplesFromReaderOutput: videoOutput, toWriterInput: videoInput) == false {
-                    videoSemaphore.signal()
+                    dispatchGroup.leave()
                 }
             })
         } else {
-            videoSemaphore.signal()
+            dispatchGroup.leave()
         }
         
         if let audioInput = self._audioInput,
             let audioOutput = self._audioOutput {
+            dispatchGroup.enter()
             audioInput.requestMediaDataWhenReady(on: self._inputQueue, using: {
                 if self.encode(readySamplesFromReaderOutput: audioOutput, toWriterInput: audioInput) == false {
-                    audioSemaphore.signal()
+                    dispatchGroup.leave()
                 }
             })
         } else {
-            audioSemaphore.signal()
+            dispatchGroup.leave()
         }
         
-        DispatchQueue.global().async {
-            audioSemaphore.wait()
-            videoSemaphore.wait()
+        dispatchGroup.notify(queue: .global()) {
             DispatchQueue.main.async {
                 self.finish()
             }
