@@ -287,9 +287,7 @@ extension NextLevelSessionExporter {
                     dispatchGroup.leave()
                 }
             })
-        } else {
-            dispatchGroup.leave()
-        }
+        } 
         
         if let audioInput = self._audioInput,
             let audioOutput = self._audioOutput {
@@ -299,9 +297,7 @@ extension NextLevelSessionExporter {
                     dispatchGroup.leave()
                 }
             })
-        } else {
-            dispatchGroup.leave()
-        }
+        } 
         
         dispatchGroup.notify(queue: .global()) {
             DispatchQueue.main.async {
