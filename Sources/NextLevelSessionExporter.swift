@@ -24,6 +24,8 @@
 import Foundation
 import AVFoundation
 
+// swiftlint:disable all
+
 // MARK: - types
 
 /// Session export errors.
@@ -155,7 +157,7 @@ open class NextLevelSessionExporter: NSObject {
     }
     
     public override init() {
-        self._inputQueue = DispatchQueue(label: InputQueueLabel, autoreleaseFrequency: .workItem, target: DispatchQueue.global())
+        self._inputQueue = DispatchQueue(label: InputQueueLabel, autoreleaseFrequency: .workItem, target: .global(qos: .userInitiated))
         self.timeRange = CMTimeRange(start: CMTime.zero, end: CMTime.positiveInfinity)
         super.init()
     }
@@ -267,7 +269,6 @@ extension NextLevelSessionExporter {
         
         self.setupVideoOutput(withAsset: asset)
         self.setupAudioOutput(withAsset: asset)
-        self.setupAudioInput()
         
         // export
         
@@ -276,11 +277,9 @@ extension NextLevelSessionExporter {
         self._writer?.startSession(atSourceTime: self.timeRange.start)
         
         let dispatchGroup = DispatchGroup()
-    
-        let videoTracks = asset.tracks(withMediaType: AVMediaType.video)
+
         if let videoInput = self._videoInput,
-           let videoOutput = self._videoOutput,
-           videoTracks.count > 0 {
+           let videoOutput = self._videoOutput {
             dispatchGroup.enter()
             videoInput.requestMediaDataWhenReady(on: self._inputQueue, using: {
                 if self.encode(readySamplesFromReaderOutput: videoOutput, toWriterInput: videoInput) == false {
@@ -299,7 +298,7 @@ extension NextLevelSessionExporter {
             })
         } 
         
-        dispatchGroup.notify(queue: .global()) {
+        dispatchGroup.notify(queue: .global(qos: .userInitiated)) {
             DispatchQueue.main.async {
                 self.finish()
             }
@@ -386,12 +385,19 @@ extension NextLevelSessionExporter {
     private func setupAudioOutput(withAsset asset: AVAsset) {
         let audioTracks = asset.tracks(withMediaType: AVMediaType.audio)
         
-        guard audioTracks.count > 0 else {
+        // Drop APAC audio tracks (found in iPhone 16 Pro / iPhone 16 Pro Max videos)
+        let filteredAudioTracks = audioTracks.filter { (track) in
+            let formatDescriptions = track.formatDescriptions as? [CMFormatDescription]
+            let containsApacAudioTrack = formatDescriptions?.contains { $0.mediaType == .audio && $0.mediaSubType.rawValue == kAudioFormatAPAC }
+            return (containsApacAudioTrack == false)
+        }
+
+        guard !filteredAudioTracks.isEmpty else {
             self._audioOutput = nil
             return
         }
 
-        self._audioOutput = AVAssetReaderAudioMixOutput(audioTracks: audioTracks, audioSettings: nil)
+        self._audioOutput = AVAssetReaderAudioMixOutput(audioTracks: filteredAudioTracks, audioSettings: nil)
         self._audioOutput?.alwaysCopiesSampleData = false
         self._audioOutput?.audioMix = self.audioMix
         if let reader = self._reader,
@@ -400,13 +406,7 @@ extension NextLevelSessionExporter {
                 reader.add(audioOutput)
             }
         }
-    }
-    
-    private func setupAudioInput() {
-        guard let _ = self._audioOutput else {
-            return
-        }
-        
+
         self._audioInput = AVAssetWriterInput(mediaType: AVMediaType.audio, outputSettings: self.audioOutputConfiguration)
         self._audioInput?.expectsMediaDataInRealTime = self.expectsMediaDataInRealTime
         if let writer = self._writer, let audioInput = self._audioInput {
