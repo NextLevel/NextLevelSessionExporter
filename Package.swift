@@ -1,4 +1,4 @@
-// swift-tools-version:5.0
+// swift-tools-version:6.0
 //
 //  Package.swift
 //  NextLevelSessionExporter (http://nextlevel.engineering/)
@@ -28,7 +28,7 @@ import PackageDescription
 let package = Package(
     name: "NextLevelSessionExporter",
     platforms: [
-      .iOS(.v13)
+      .iOS(.v15), .macOS(.v12)
     ],
     products: [
       .library(name: "NextLevelSessionExporter", targets: ["SessionExporter"])
@@ -39,5 +39,5 @@ let package = Package(
           path: "Sources"
       )
     ],
-    swiftLanguageVersions: [.v5]
+    swiftLanguageModes: [.v6]
 )

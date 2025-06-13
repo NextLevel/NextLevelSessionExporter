@@ -1,6 +1,6 @@
 //
 //  AppDelegate.swift
-//  NextLevelSessionExporter (http://nextlevel.engineering/)
+//  NextLevelSessionExporter
 //
 //  Copyright (c) 2016-present patrick piemonte (http://patrickpiemonte.com)
 //

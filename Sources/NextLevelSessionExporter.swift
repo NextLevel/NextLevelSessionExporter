@@ -1,6 +1,6 @@
 //
 //  NextLevelSessionExporter.swift
-//  NextLevelSessionExporter (http://nextlevel.engineering/)
+//  NextLevelSessionExporter
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a copy
 //  of this software and associated documentation files (the "Software"), to deal
@@ -22,12 +22,39 @@
 //
 
 import Foundation
-import AVFoundation
+@preconcurrency import AVFoundation
+
+// MARK: - Sendable types
+
+/// Progress information for async export operations.
+public struct ExportProgress: Sendable {
+    public let progress: Float
+    public let estimatedTimeRemaining: TimeInterval?
+    
+    public init(progress: Float, estimatedTimeRemaining: TimeInterval? = nil) {
+        self.progress = progress
+        self.estimatedTimeRemaining = estimatedTimeRemaining
+    }
+}
+
+/// Render frame data for async operations.
+/// Note: CVPixelBuffer doesn't conform to Sendable, so we use @unchecked
+public struct RenderFrameData: @unchecked Sendable {
+    public let renderFrame: CVPixelBuffer
+    public let presentationTime: CMTime
+    public let resultingBuffer: CVPixelBuffer
+    
+    public init(renderFrame: CVPixelBuffer, presentationTime: CMTime, resultingBuffer: CVPixelBuffer) {
+        self.renderFrame = renderFrame
+        self.presentationTime = presentationTime
+        self.resultingBuffer = resultingBuffer
+    }
+}
 
 // MARK: - types
 
 /// Session export errors.
-public enum NextLevelSessionExporterError: Error, CustomStringConvertible {
+public enum NextLevelSessionExporterError: Error, CustomStringConvertible, Sendable {
     case setupFailure
     case readingFailure
     case writingFailure
@@ -49,51 +76,145 @@ public enum NextLevelSessionExporterError: Error, CustomStringConvertible {
     }
 }
 
+// MARK: - ExportState Actor
+
+/// Actor to encapsulate mutable state for thread safety in Swift 6
+actor ExportState {
+    var writer: AVAssetWriter?
+    var reader: AVAssetReader?
+    var pixelBufferAdaptor: AVAssetWriterInputPixelBufferAdaptor?
+    
+    var videoOutput: AVAssetReaderVideoCompositionOutput?
+    var audioOutput: AVAssetReaderAudioMixOutput?
+    var videoInput: AVAssetWriterInput?
+    var audioInput: AVAssetWriterInput?
+    
+    var progress: Float = 0
+    var duration: TimeInterval = 0
+    var lastSamplePresentationTime: CMTime = .invalid
+    
+    var progressHandler: (@Sendable (Float) -> Void)?
+    var renderHandler: (@Sendable (CVPixelBuffer, CMTime, CVPixelBuffer) -> Void)?
+    var completionHandler: (@Sendable (Swift.Result<AVAssetExportSession.Status, Error>) -> Void)?
+    
+    func reset() {
+        self.progress = 0
+        self.writer = nil
+        self.reader = nil
+        self.pixelBufferAdaptor = nil
+        
+        self.videoOutput = nil
+        self.audioOutput = nil
+        self.videoInput = nil
+        self.audioInput = nil
+        
+        self.progressHandler = nil
+        self.renderHandler = nil
+        self.completionHandler = nil
+    }
+    
+    func clearCompletionHandler() {
+        self.completionHandler = nil
+    }
+    
+    func setLastSamplePresentationTime(_ time: CMTime) {
+        self.lastSamplePresentationTime = time
+    }
+    
+    func setHandlers(progress: (@Sendable (Float) -> Void)? = nil,
+                    render: (@Sendable (CVPixelBuffer, CMTime, CVPixelBuffer) -> Void)? = nil,
+                    completion: (@Sendable (Swift.Result<AVAssetExportSession.Status, Error>) -> Void)? = nil) {
+        self.progressHandler = progress
+        self.renderHandler = render
+        self.completionHandler = completion
+    }
+    
+    func setWriter(_ writer: AVAssetWriter?) {
+        self.writer = writer
+    }
+    
+    func setReader(_ reader: AVAssetReader?) {
+        self.reader = reader
+    }
+    
+    func setDuration(_ duration: TimeInterval) {
+        self.duration = duration
+    }
+    
+    func setVideoInputOutput(input: AVAssetWriterInput?, output: AVAssetReaderVideoCompositionOutput?, adaptor: AVAssetWriterInputPixelBufferAdaptor?) {
+        self.videoInput = input
+        self.videoOutput = output
+        self.pixelBufferAdaptor = adaptor
+    }
+    
+    func setAudioInputOutput(input: AVAssetWriterInput?, output: AVAssetReaderAudioMixOutput?) {
+        self.audioInput = input
+        self.audioOutput = output
+    }
+    
+    func setAudioInput(_ input: AVAssetWriterInput?) {
+        self.audioInput = input
+    }
+    
+    func updateProgress(_ newProgress: Float) {
+        self.progress = newProgress
+        self.progressHandler?(newProgress)
+    }
+}
+
 // MARK: - NextLevelSessionExporter
 
 /// 🔄 NextLevelSessionExporter, export and transcode media in Swift
-open class NextLevelSessionExporter: NSObject {
+/// Note: Using @unchecked Sendable as the configuration dictionaries cannot be made Sendable.
+/// Thread safety is ensured through immutable properties and actor isolation of mutable state.
+public final class NextLevelSessionExporter: NSObject, @unchecked Sendable {
 
     /// Input asset for export, provided when initialized.
-    public var asset: AVAsset?
+    public let asset: AVAsset?
 
     /// Enables video composition and parameters for the session.
-    public var videoComposition: AVVideoComposition?
+    public let videoComposition: AVVideoComposition?
 
     /// Enables audio mixing and parameters for the session.
-    public var audioMix: AVAudioMix?
+    public let audioMix: AVAudioMix?
 
     /// Output file location for the session.
-    public var outputURL: URL?
+    public let outputURL: URL?
 
     /// Output file type. UTI string defined in `AVMediaFormat.h`.
-    public var outputFileType: AVFileType? = AVFileType.mp4
+    public let outputFileType: AVFileType?
 
     /// Time range or limit of an export from `kCMTimeZero` to `kCMTimePositiveInfinity`
-    public var timeRange: CMTimeRange
+    public let timeRange: CMTimeRange
 
     /// Indicates if an export session should expect media data in real time.
-    public var expectsMediaDataInRealTime: Bool = false
+    public let expectsMediaDataInRealTime: Bool
 
     /// Indicates if an export should be optimized for network use.
-    public var optimizeForNetworkUse: Bool = false
+    public let optimizeForNetworkUse: Bool
 
     /// Metadata to be added to an export.
-    public var metadata: [AVMetadataItem]?
+    public let metadata: [AVMetadataItem]?
 
     /// Video input configuration dictionary, using keys defined in `<CoreVideo/CVPixelBuffer.h>`
-    public var videoInputConfiguration: [String : Any]?
+    public let videoInputConfiguration: [String : Any]?
 
     /// Video output configuration dictionary, using keys defined in `<AVFoundation/AVVideoSettings.h>`
-    public var videoOutputConfiguration: [String : Any]?
+    public let videoOutputConfiguration: [String : Any]?
 
     /// Audio output configuration dictionary, using keys defined in `<AVFoundation/AVAudioSettings.h>`
-    public var audioOutputConfiguration: [String : Any]?
+    public let audioOutputConfiguration: [String : Any]?
+
+    // private instance vars
+    private let exportState = ExportState()
+    private let inputQueue: DispatchQueue
+    
+    private static let inputQueueLabel = "NextLevelSessionExporterInputQueue"
 
     /// Export session status state.
     public var status: AVAssetExportSession.Status {
-        get {
-            if let writer = self._writer {
+        get async {
+            if let writer = await exportState.writer {
                 switch writer.status {
                 case .writing:
                     return .exporting
@@ -115,34 +236,10 @@ open class NextLevelSessionExporter: NSObject {
 
     /// Session exporting progress from 0 to 1.
     public var progress: Float {
-        get {
-            return self._progress
+        get async {
+            return await exportState.progress
         }
     }
-
-    // private instance vars
-
-    fileprivate let InputQueueLabel = "NextLevelSessionExporterInputQueue"
-
-    fileprivate var _writer: AVAssetWriter?
-    fileprivate var _reader: AVAssetReader?
-    fileprivate var _pixelBufferAdaptor: AVAssetWriterInputPixelBufferAdaptor?
-
-    fileprivate var _inputQueue: DispatchQueue
-
-    fileprivate var _videoOutput: AVAssetReaderVideoCompositionOutput?
-    fileprivate var _audioOutput: AVAssetReaderAudioMixOutput?
-    fileprivate var _videoInput: AVAssetWriterInput?
-    fileprivate var _audioInput: AVAssetWriterInput?
-
-    fileprivate var _progress: Float = 0
-
-    fileprivate var _progressHandler: ProgressHandler?
-    fileprivate var _renderHandler: RenderHandler?
-    fileprivate var _completionHandler: CompletionHandler?
-
-    fileprivate var _duration: TimeInterval = 0
-    fileprivate var _lastSamplePresentationTime: CMTime = .invalid
 
     // MARK: - object lifecycle
 
@@ -150,24 +247,74 @@ open class NextLevelSessionExporter: NSObject {
     ///
     /// - Parameter asset: The asset to export.
     public convenience init(withAsset asset: AVAsset) {
-        self.init()
-        self.asset = asset
+        self.init(
+            asset: asset,
+            videoComposition: nil,
+            audioMix: nil,
+            outputURL: nil,
+            outputFileType: .mp4,
+            timeRange: CMTimeRange(start: CMTime.zero, end: CMTime.positiveInfinity),
+            expectsMediaDataInRealTime: false,
+            optimizeForNetworkUse: false,
+            metadata: nil,
+            videoInputConfiguration: nil,
+            videoOutputConfiguration: nil,
+            audioOutputConfiguration: nil
+        )
     }
 
-    public override init() {
-        self._inputQueue = DispatchQueue(label: InputQueueLabel, autoreleaseFrequency: .workItem, target: DispatchQueue.global())
-        self.timeRange = CMTimeRange(start: CMTime.zero, end: CMTime.positiveInfinity)
+    public init(
+        asset: AVAsset? = nil,
+        videoComposition: AVVideoComposition? = nil,
+        audioMix: AVAudioMix? = nil,
+        outputURL: URL? = nil,
+        outputFileType: AVFileType? = .mp4,
+        timeRange: CMTimeRange = CMTimeRange(start: CMTime.zero, end: CMTime.positiveInfinity),
+        expectsMediaDataInRealTime: Bool = false,
+        optimizeForNetworkUse: Bool = false,
+        metadata: [AVMetadataItem]? = nil,
+        videoInputConfiguration: [String : Any]? = nil,
+        videoOutputConfiguration: [String : Any]? = nil,
+        audioOutputConfiguration: [String : Any]? = nil
+    ) {
+        self.asset = asset
+        self.videoComposition = videoComposition
+        self.audioMix = audioMix
+        self.outputURL = outputURL
+        self.outputFileType = outputFileType
+        self.timeRange = timeRange
+        self.expectsMediaDataInRealTime = expectsMediaDataInRealTime
+        self.optimizeForNetworkUse = optimizeForNetworkUse
+        self.metadata = metadata
+        self.videoInputConfiguration = videoInputConfiguration
+        self.videoOutputConfiguration = videoOutputConfiguration
+        self.audioOutputConfiguration = audioOutputConfiguration
+        self.inputQueue = DispatchQueue(label: Self.inputQueueLabel, autoreleaseFrequency: .workItem, target: DispatchQueue.global())
         super.init()
     }
-
-    deinit {
-        self._writer = nil
-        self._reader = nil
-        self._pixelBufferAdaptor = nil
-        self._videoOutput = nil
-        self._audioOutput = nil
-        self._videoInput = nil
-        self._audioInput = nil
+    
+    /// Creates a configured exporter from the current instance's properties.
+    /// Use this method when you need to create a new exporter with updated configuration.
+    public func makeConfiguredExporter(
+        outputURL: URL? = nil,
+        outputFileType: AVFileType? = nil,
+        videoOutputConfiguration: [String : Any]? = nil,
+        audioOutputConfiguration: [String : Any]? = nil
+    ) -> NextLevelSessionExporter {
+        return NextLevelSessionExporter(
+            asset: self.asset,
+            videoComposition: self.videoComposition,
+            audioMix: self.audioMix,
+            outputURL: outputURL ?? self.outputURL,
+            outputFileType: outputFileType ?? self.outputFileType,
+            timeRange: self.timeRange,
+            expectsMediaDataInRealTime: self.expectsMediaDataInRealTime,
+            optimizeForNetworkUse: self.optimizeForNetworkUse,
+            metadata: self.metadata,
+            videoInputConfiguration: self.videoInputConfiguration,
+            videoOutputConfiguration: videoOutputConfiguration ?? self.videoOutputConfiguration,
+            audioOutputConfiguration: audioOutputConfiguration ?? self.audioOutputConfiguration
+        )
     }
 }
 
@@ -176,148 +323,230 @@ open class NextLevelSessionExporter: NSObject {
 extension NextLevelSessionExporter {
 
     /// Completion handler type for when an export finishes.
-    public typealias CompletionHandler = (Swift.Result<AVAssetExportSession.Status, Error>) -> Void
+    public typealias CompletionHandler = @Sendable (Swift.Result<AVAssetExportSession.Status, Error>) -> Void
 
     /// Progress handler type
-    public typealias ProgressHandler = (_ progress: Float) -> Void
+    public typealias ProgressHandler = @Sendable (_ progress: Float) -> Void
 
     /// Render handler type for frame processing
-    public typealias RenderHandler = (_ renderFrame: CVPixelBuffer, _ presentationTime: CMTime, _ resultingBuffer: CVPixelBuffer) -> Void
+    public typealias RenderHandler = @Sendable (_ renderFrame: CVPixelBuffer, _ presentationTime: CMTime, _ resultingBuffer: CVPixelBuffer) -> Void
 
-    /// Initiates an export session.
-    ///
-    /// - Parameter completionHandler: Handler called when an export session completes.
-    /// - Throws: Failure indication thrown when an error has occurred during export.
+    // MARK: - Modern async/await export methods
+    
+    /// Initiates an async export session with progress reporting.
+    /// 
+    /// - Parameter renderHandler: Optional closure for custom frame rendering
+    /// - Returns: AsyncThrowingStream of ExportProgress updates
+    /// - Throws: NextLevelSessionExporterError on export failure
+    @available(iOS 15.0, macOS 12.0, *)
+    @discardableResult
+    public func export(renderHandler: (@Sendable (RenderFrameData) async -> Void)? = nil) -> AsyncThrowingStream<ExportProgress, Error> {
+        return AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    try await _performAsyncExport(progressContinuation: continuation, renderHandler: renderHandler)
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
+    }
+    
+    /// Simplified async export method that returns only the final status.
+    /// 
+    /// - Parameter renderHandler: Optional closure for custom frame rendering
+    /// - Returns: Final export status
+    /// - Throws: NextLevelSessionExporterError on export failure
+    @available(iOS 15.0, macOS 12.0, *)
+    public func exportAsync(renderHandler: (@Sendable (RenderFrameData) async -> Void)? = nil) async throws -> AVAssetExportSession.Status {
+        for try await progress in export(renderHandler: renderHandler) {
+            // We only care about the final result, so we continue until completion
+            if progress.progress >= 1.0 {
+                break
+            }
+        }
+        return await self.status
+    }
+    
+    // MARK: - Legacy completion handler methods
+    
+    /// Legacy export method using completion handlers.
+    /// - Note: This method is deprecated. Use `export(renderHandler:)` or `exportAsync(renderHandler:)` instead.
+    /// 
+    /// - Parameters:
+    ///   - renderHandler: optional render process handler
+    ///   - progressHandler: optional export progress handler
+    ///   - completionHandler: completion handler, called when the export fails or succeeds
+    @available(*, deprecated, message: "Use async export methods instead")
     public func export(renderHandler: RenderHandler? = nil,
                        progressHandler: ProgressHandler? = nil,
                        completionHandler: CompletionHandler? = nil) {
+        Task {
+            await _performLegacyExport(renderHandler: renderHandler, progressHandler: progressHandler, completionHandler: completionHandler)
+        }
+    }
+    
+    private func _performLegacyExport(renderHandler: RenderHandler? = nil,
+                                     progressHandler: ProgressHandler? = nil,
+                                     completionHandler: CompletionHandler? = nil) async {
         guard let asset = self.asset,
               let outputURL = self.outputURL,
               let outputFileType = self.outputFileType else {
             print("NextLevelSessionExporter, an asset and output URL are required for encoding")
-            DispatchQueue.main.async {
-                self._completionHandler?(.failure(NextLevelSessionExporterError.setupFailure))
+            await MainActor.run {
+                completionHandler?(.failure(NextLevelSessionExporterError.setupFailure))
             }
             return
         }
 
-        if self._writer?.status == .writing {
-            self._writer?.cancelWriting()
-            self._writer = nil
-        }
-
-        if self._reader?.status == .reading {
-            self._reader?.cancelReading()
-            self._reader = nil
-        }
-
-        self._progress = 0
+        // Reset any existing export
+        await exportState.reset()
+        
+        // Store handlers
+        await exportState.setHandlers(progress: progressHandler, render: renderHandler, completion: completionHandler)
 
         do {
-            self._reader = try AVAssetReader(asset: asset)
-        } catch {
-            print("NextLevelSessionExporter, could not setup a reader for the provided asset \(asset)")
-            DispatchQueue.main.async {
-                self._completionHandler?(.failure(NextLevelSessionExporterError.setupFailure))
+            let reader = try AVAssetReader(asset: asset)
+            let writer = try AVAssetWriter(outputURL: outputURL, fileType: outputFileType)
+            
+            await exportState.setReader(reader)
+            await exportState.setWriter(writer)
+            
+            // Cancel any existing operations
+            if writer.status == .writing {
+                writer.cancelWriting()
             }
-        }
-
-        do {
-            self._writer = try AVAssetWriter(outputURL: outputURL, fileType: outputFileType)
-        } catch {
-            print("NextLevelSessionExporter, could not setup a reader for the provided asset \(asset)")
-            DispatchQueue.main.async {
-                self._completionHandler?(.failure(NextLevelSessionExporterError.setupFailure))
+            if reader.status == .reading {
+                reader.cancelReading()
             }
-        }
 
-        // if a video configuration exists, validate it (otherwise, proceed as audio)
-        if let _ = self.videoOutputConfiguration, self.validateVideoOutputConfiguration() == false {
-            print("NextLevelSessionExporter, could not setup with the specified video output configuration")
-            DispatchQueue.main.async {
-                self._completionHandler?(.failure(NextLevelSessionExporterError.setupFailure))
+            reader.timeRange = self.timeRange
+            writer.shouldOptimizeForNetworkUse = self.optimizeForNetworkUse
+            writer.metadata = self.metadata ?? []
+
+            // video output
+            await self.setupVideoOutput(withAsset: asset, reader: reader, writer: writer)
+            await self.setupAudioOutput(withAsset: asset, reader: reader)
+            await self.setupAudioInput(writer: writer)
+
+            // export
+            writer.startWriting()
+            reader.startReading()
+            writer.startSession(atSourceTime: self.timeRange.start)
+
+            let videoSemaphore = DispatchSemaphore(value: 0)
+            let audioSemaphore = DispatchSemaphore(value: 0)
+
+            let duration = CMTimeGetSeconds(self.timeRange.duration)
+            await exportState.setDuration((duration.isFinite && duration > 0) ? duration : CMTimeGetSeconds(asset.duration))
+
+            // video encoding
+            if let videoInput = await exportState.videoInput,
+               let videoOutput = await exportState.videoOutput {
+                videoInput.requestMediaDataWhenReady(on: self.inputQueue, using: {
+                    Task {
+                        let success = await self.encodeReadySamples(fromOutput: videoOutput, toInput: videoInput)
+                        if !success {
+                            videoSemaphore.signal()
+                        }
+                    }
+                })
+            } else {
+                videoSemaphore.signal()
             }
-        }
 
-        self._progressHandler = progressHandler
-        self._renderHandler = renderHandler
-        self._completionHandler = completionHandler
+            // audio encoding
+            if let audioInput = await exportState.audioInput,
+               let audioOutput = await exportState.audioOutput {
+                audioInput.requestMediaDataWhenReady(on: self.inputQueue, using: {
+                    Task {
+                        let success = await self.encodeReadySamples(fromOutput: audioOutput, toInput: audioInput)
+                        if !success {
+                            audioSemaphore.signal()
+                        }
+                    }
+                })
+            } else {
+                audioSemaphore.signal()
+            }
 
-        self._reader?.timeRange = self.timeRange
-        self._writer?.shouldOptimizeForNetworkUse = self.optimizeForNetworkUse
-
-        if let metadata = self.metadata {
-            self._writer?.metadata = metadata
-        }
-
-        if self.timeRange.duration.isValid && self.timeRange.duration.isPositiveInfinity == false {
-            self._duration = CMTimeGetSeconds(self.timeRange.duration)
-        } else {
-            self._duration = CMTimeGetSeconds(asset.duration)
-        }
-
-        if self.videoOutputConfiguration?.keys.contains(AVVideoCodecKey) == false {
-            print("NextLevelSessionExporter, warning a video output configuration codec wasn't specified")
-            self.videoOutputConfiguration?[AVVideoCodecKey] = AVVideoCodecType.h264
-        }
-
-        self.setupVideoOutput(withAsset: asset)
-        self.setupAudioOutput(withAsset: asset)
-        self.setupAudioInput()
-
-        // export
-
-        self._writer?.startWriting()
-        self._reader?.startReading()
-        self._writer?.startSession(atSourceTime: self.timeRange.start)
-
-        let dispatchGroup = DispatchGroup()
-
-        let videoTracks = asset.tracks(withMediaType: AVMediaType.video)
-        if let videoInput = self._videoInput,
-           let videoOutput = self._videoOutput,
-           videoTracks.count > 0 {
-            dispatchGroup.enter()
-            videoInput.requestMediaDataWhenReady(on: self._inputQueue, using: {
-                if self.encode(readySamplesFromReaderOutput: videoOutput, toWriterInput: videoInput) == false {
-                    dispatchGroup.leave()
+            // wait for encoding to finish using non-async context
+            await Task { @MainActor in }.value // switch to main actor
+            
+            _ = await withUnsafeContinuation { continuation in
+                DispatchQueue.global().async {
+                    videoSemaphore.wait()
+                    audioSemaphore.wait()
+                    continuation.resume(returning: ())
                 }
-            })
-        }
+            }
 
-        if let audioInput = self._audioInput,
-            let audioOutput = self._audioOutput {
-            dispatchGroup.enter()
-            audioInput.requestMediaDataWhenReady(on: self._inputQueue, using: {
-                if self.encode(readySamplesFromReaderOutput: audioOutput, toWriterInput: audioInput) == false {
-                    dispatchGroup.leave()
+            await self.finish()
+        } catch {
+            print("NextLevelSessionExporter, failed to setup \(error)")
+            await MainActor.run {
+                completionHandler?(.failure(NextLevelSessionExporterError.setupFailure))
+            }
+        }
+    }
+    
+    @available(iOS 15.0, macOS 12.0, *)
+    private func _performAsyncExport(progressContinuation: AsyncThrowingStream<ExportProgress, Error>.Continuation, renderHandler: (@Sendable (RenderFrameData) async -> Void)?) async throws {
+        return try await withCheckedThrowingContinuation { continuation in
+            Task {
+                // Store the continuation for completion callback
+                let completionHandler: CompletionHandler = { result in
+                    switch result {
+                    case .success(_):
+                        progressContinuation.finish()
+                        continuation.resume(returning: ())
+                    case .failure(let error):
+                        progressContinuation.finish(throwing: error)
+                        continuation.resume(throwing: error)
+                    }
                 }
-            })
-        }
-
-        dispatchGroup.notify(queue: .global()) {
-            DispatchQueue.main.async {
-                self.finish()
+                
+                // Convert async render handler to sync for legacy system
+                let syncRenderHandler: RenderHandler?
+                if let handler = renderHandler {
+                    syncRenderHandler = { renderFrame, presentationTime, resultingBuffer in
+                        let frameData = RenderFrameData(renderFrame: renderFrame, presentationTime: presentationTime, resultingBuffer: resultingBuffer)
+                        Task {
+                            await handler(frameData)
+                        }
+                    }
+                } else {
+                    syncRenderHandler = nil
+                }
+                
+                // Progress handler that feeds the AsyncStream
+                let progressHandler: ProgressHandler = { progress in
+                    let exportProgress = ExportProgress(progress: progress)
+                    progressContinuation.yield(exportProgress)
+                }
+                
+                // Call the legacy export method
+                await self._performLegacyExport(renderHandler: syncRenderHandler, progressHandler: progressHandler, completionHandler: completionHandler)
             }
         }
     }
 
     /// Cancels any export in progress.
-    public func cancelExport() {
-        self._inputQueue.async {
-            if self._writer?.status == .writing {
-                self._writer?.cancelWriting()
+    public func cancelExport() async {
+        let writer = await exportState.writer
+        let reader = await exportState.reader
+        
+        self.inputQueue.async {
+            if writer?.status == .writing {
+                writer?.cancelWriting()
             }
-
-            if self._reader?.status == .reading {
-                self._reader?.cancelReading()
-            }
-
-            DispatchQueue.main.async {
-                self.complete()
-                self.reset()
+            if reader?.status == .reading {
+                reader?.cancelReading()
             }
         }
+        
+        await self.complete()
+        await exportState.reset()
     }
 
 }
@@ -326,64 +555,59 @@ extension NextLevelSessionExporter {
 
 extension NextLevelSessionExporter {
 
-    private func setupVideoOutput(withAsset asset: AVAsset) {
+    private func setupVideoOutput(withAsset asset: AVAsset, reader: AVAssetReader, writer: AVAssetWriter) async {
         let videoTracks = asset.tracks(withMediaType: AVMediaType.video)
 
         guard videoTracks.count > 0 else {
             return
         }
 
-        self._videoOutput = AVAssetReaderVideoCompositionOutput(videoTracks: videoTracks, videoSettings: self.videoInputConfiguration)
-        self._videoOutput?.alwaysCopiesSampleData = false
+        let videoOutput = AVAssetReaderVideoCompositionOutput(videoTracks: videoTracks, videoSettings: self.videoInputConfiguration)
+        videoOutput.alwaysCopiesSampleData = false
 
         if let videoComposition = self.videoComposition {
-            self._videoOutput?.videoComposition = videoComposition
+            videoOutput.videoComposition = videoComposition
         } else {
-            self._videoOutput?.videoComposition = self.createVideoComposition()
+            videoOutput.videoComposition = self.createVideoComposition()
         }
 
-        if let videoOutput = self._videoOutput,
-            let reader = self._reader {
-            if reader.canAdd(videoOutput) {
-                reader.add(videoOutput)
-            }
+        if reader.canAdd(videoOutput) {
+            reader.add(videoOutput)
         }
 
         // video input
-        if self._writer?.canApply(outputSettings: self.videoOutputConfiguration, forMediaType: AVMediaType.video) == true {
-            self._videoInput = AVAssetWriterInput(mediaType: AVMediaType.video, outputSettings: self.videoOutputConfiguration)
-            self._videoInput?.expectsMediaDataInRealTime = self.expectsMediaDataInRealTime
-        } else {
+        guard let videoOutputConfiguration = self.videoOutputConfiguration,
+              writer.canApply(outputSettings: videoOutputConfiguration, forMediaType: AVMediaType.video) else {
             print("Unsupported output configuration")
             return
         }
+        
+        let videoInput = AVAssetWriterInput(mediaType: AVMediaType.video, outputSettings: videoOutputConfiguration)
+        videoInput.expectsMediaDataInRealTime = self.expectsMediaDataInRealTime
 
-        if let writer = self._writer,
-            let videoInput = self._videoInput {
-            if writer.canAdd(videoInput) {
-                writer.add(videoInput)
-            }
-
-            // setup pixelbuffer adaptor
-
-            var pixelBufferAttrib: [String : Any] = [:]
-            pixelBufferAttrib[kCVPixelBufferPixelFormatTypeKey as String] = NSNumber(integerLiteral: Int(kCVPixelFormatType_32RGBA))
-            if let videoComposition = self._videoOutput?.videoComposition {
-                pixelBufferAttrib[kCVPixelBufferWidthKey as String] = NSNumber(integerLiteral: Int(videoComposition.renderSize.width))
-                pixelBufferAttrib[kCVPixelBufferHeightKey as String] = NSNumber(integerLiteral: Int(videoComposition.renderSize.height))
-            }
-            pixelBufferAttrib["IOSurfaceOpenGLESTextureCompatibility"] = NSNumber(booleanLiteral:  true)
-            pixelBufferAttrib["IOSurfaceOpenGLESFBOCompatibility"] = NSNumber(booleanLiteral:  true)
-
-            self._pixelBufferAdaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: videoInput, sourcePixelBufferAttributes: pixelBufferAttrib)
+        if writer.canAdd(videoInput) {
+            writer.add(videoInput)
         }
+
+        // setup pixelbuffer adaptor
+        var pixelBufferAttrib: [String : Any] = [:]
+        pixelBufferAttrib[kCVPixelBufferPixelFormatTypeKey as String] = NSNumber(integerLiteral: Int(kCVPixelFormatType_32RGBA))
+        if let videoComposition = videoOutput.videoComposition {
+            pixelBufferAttrib[kCVPixelBufferWidthKey as String] = NSNumber(integerLiteral: Int(videoComposition.renderSize.width))
+            pixelBufferAttrib[kCVPixelBufferHeightKey as String] = NSNumber(integerLiteral: Int(videoComposition.renderSize.height))
+        }
+        pixelBufferAttrib["IOSurfaceOpenGLESTextureCompatibility"] = NSNumber(booleanLiteral:  true)
+        pixelBufferAttrib["IOSurfaceOpenGLESFBOCompatibility"] = NSNumber(booleanLiteral:  true)
+
+        let pixelBufferAdaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: videoInput, sourcePixelBufferAttributes: pixelBufferAttrib)
+        
+        await exportState.setVideoInputOutput(input: videoInput, output: videoOutput, adaptor: pixelBufferAdaptor)
     }
 
-    private func setupAudioOutput(withAsset asset: AVAsset) {
+    private func setupAudioOutput(withAsset asset: AVAsset, reader: AVAssetReader) async {
         let audioTracks = asset.tracks(withMediaType: AVMediaType.audio)
 
         guard audioTracks.count > 0 else {
-            self._audioOutput = nil
             return
         }
 
@@ -396,81 +620,91 @@ extension NextLevelSessionExporter {
             }
         }
 
-        self._audioOutput = AVAssetReaderAudioMixOutput(audioTracks: audioTracksToUse, audioSettings: nil)
-        self._audioOutput?.alwaysCopiesSampleData = false
-        self._audioOutput?.audioMix = self.audioMix
-        if let reader = self._reader,
-            let audioOutput = self._audioOutput {
-            if reader.canAdd(audioOutput) {
-                reader.add(audioOutput)
-            }
+        let audioOutput = AVAssetReaderAudioMixOutput(audioTracks: audioTracksToUse, audioSettings: nil)
+        audioOutput.alwaysCopiesSampleData = false
+        audioOutput.audioMix = self.audioMix
+        
+        if reader.canAdd(audioOutput) {
+            reader.add(audioOutput)
         }
+        
+        await exportState.setAudioInputOutput(input: nil, output: audioOutput)
     }
 
-    private func setupAudioInput() {
-        guard let _ = self._audioOutput else {
+    private func setupAudioInput(writer: AVAssetWriter) async {
+        guard await exportState.audioOutput != nil else {
             return
         }
 
-        self._audioInput = AVAssetWriterInput(mediaType: AVMediaType.audio, outputSettings: self.audioOutputConfiguration)
-        self._audioInput?.expectsMediaDataInRealTime = self.expectsMediaDataInRealTime
-        if let writer = self._writer, let audioInput = self._audioInput {
-            if writer.canAdd(audioInput) {
-                writer.add(audioInput)
-            }
+        let audioInput = AVAssetWriterInput(mediaType: AVMediaType.audio, outputSettings: self.audioOutputConfiguration)
+        audioInput.expectsMediaDataInRealTime = self.expectsMediaDataInRealTime
+        
+        if writer.canAdd(audioInput) {
+            writer.add(audioInput)
         }
+        
+        await exportState.setAudioInput(audioInput)
     }
 
-}
-
-// MARK: - internal funcs
-
-extension NextLevelSessionExporter {
-
-    // called on the inputQueue
-    internal func encode(readySamplesFromReaderOutput output: AVAssetReaderOutput, toWriterInput input: AVAssetWriterInput) -> Bool {
+    private func encodeReadySamples(fromOutput output: AVAssetReaderOutput, toInput input: AVAssetWriterInput) async -> Bool {
         while input.isReadyForMoreMediaData {
-            guard self._reader?.status == .reading && self._writer?.status == .writing,
-                  let sampleBuffer = output.copyNextSampleBuffer() else {
-                input.markAsFinished()
+            let complete = await self.encode(readySamplesFromOutput: output, toInput: input)
+            if !complete {
                 return false
             }
+        }
+        return true
+    }
 
-            var handled = false
-            var error = false
-            if self._videoOutput == output {
-                // determine progress
-                self._lastSamplePresentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer) - self.timeRange.start
-                let progress = self._duration == 0 ? 1 : Float(CMTimeGetSeconds(self._lastSamplePresentationTime) / self._duration)
-                self.updateProgress(progress: progress)
+    private func encode(readySamplesFromOutput output: AVAssetReaderOutput, toInput input: AVAssetWriterInput) async -> Bool {
+        guard let sampleBuffer = output.copyNextSampleBuffer() else {
+            input.markAsFinished()
+            return false
+        }
 
-                // prepare progress frames
-                if let pixelBufferAdaptor = self._pixelBufferAdaptor,
-                    let pixelBufferPool = pixelBufferAdaptor.pixelBufferPool,
-                    let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
+        var handled = false
+        var error = false
+        
+        let videoOutput = await exportState.videoOutput
+        let pixelBufferAdaptor = await exportState.pixelBufferAdaptor
+        let renderHandler = await exportState.renderHandler
+        
+        if videoOutput === output {
+            // determine progress
+            let lastSamplePresentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer) - self.timeRange.start
+            await exportState.setLastSamplePresentationTime(lastSamplePresentationTime)
+            
+            let duration = await exportState.duration
+            let progress = duration == 0 ? 1 : Float(CMTimeGetSeconds(lastSamplePresentationTime) / duration)
+            await self.updateProgress(progress: progress)
 
-                    var toRenderBuffer: CVPixelBuffer? = nil
-                    let result = CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pixelBufferPool, &toRenderBuffer)
-                    if result == kCVReturnSuccess {
-                        if let toBuffer = toRenderBuffer {
-                            self._renderHandler?(pixelBuffer, self._lastSamplePresentationTime, toBuffer)
-                            if pixelBufferAdaptor.append(toBuffer, withPresentationTime:self._lastSamplePresentationTime) == false {
-                                error = true
-                            }
-                            handled = true
+            // prepare progress frames
+            if let pixelBufferAdaptor = pixelBufferAdaptor,
+               let pixelBufferPool = pixelBufferAdaptor.pixelBufferPool,
+               let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
+
+                var toRenderBuffer: CVPixelBuffer? = nil
+                let result = CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pixelBufferPool, &toRenderBuffer)
+                if result == kCVReturnSuccess {
+                    if let toBuffer = toRenderBuffer {
+                        renderHandler?(pixelBuffer, lastSamplePresentationTime, toBuffer)
+                        if pixelBufferAdaptor.append(toBuffer, withPresentationTime: lastSamplePresentationTime) == false {
+                            error = true
                         }
+                        handled = true
                     }
                 }
             }
-
-            if handled == false && input.append(sampleBuffer) == false {
-                error = true
-            }
-
-            if error {
-                return false
-            }
         }
+
+        if handled == false && input.append(sampleBuffer) == false {
+            error = true
+        }
+
+        if error {
+            return false
+        }
+        
         return true
     }
 
@@ -562,66 +796,87 @@ extension NextLevelSessionExporter {
         return videoComposition
     }
 
-    internal func updateProgress(progress: Float) {
-        self.willChangeValue(forKey: "progress")
-        self._progress = progress
-        self.didChangeValue(forKey: "progress")
-        self._progressHandler?(progress)
+    internal func updateProgress(progress: Float) async {
+        await exportState.updateProgress(progress)
     }
 
     // always called on the main thread
-    internal func finish() {
-        if self._reader?.status == .cancelled || self._writer?.status == .cancelled {
-            self.complete()
-        } else if self._writer?.status == .failed {
-            self._reader?.cancelReading()
-            self.complete()
-        } else if self._reader?.status == .failed {
-            self._writer?.cancelWriting()
-            self.complete()
+    internal func finish() async {
+        let reader = await exportState.reader
+        let writer = await exportState.writer
+        
+        if reader?.status == .cancelled || writer?.status == .cancelled {
+            await self.complete()
+        } else if writer?.status == .failed {
+            reader?.cancelReading()
+            await self.complete()
+        } else if reader?.status == .failed {
+            writer?.cancelWriting()
+            await self.complete()
         } else {
-            self._writer?.finishWriting {
-                self.complete()
+            await withCheckedContinuation { continuation in
+                writer?.finishWriting {
+                    Task {
+                        await self.complete()
+                        continuation.resume()
+                    }
+                }
             }
         }
     }
 
     // always called on the main thread
-    internal func complete() {
-        if self._reader?.status == .cancelled || self._writer?.status == .cancelled {
+    internal func complete() async {
+        let reader = await exportState.reader
+        let writer = await exportState.writer
+        let completionHandler = await exportState.completionHandler
+        
+        if reader?.status == .cancelled || writer?.status == .cancelled {
             guard let outputURL = self.outputURL else {
-                self._completionHandler?(.failure(NextLevelSessionExporterError.cancelled))
+                await MainActor.run {
+                    completionHandler?(.failure(NextLevelSessionExporterError.cancelled))
+                }
                 return
             }
             if FileManager.default.fileExists(atPath: outputURL.absoluteString) {
                 try? FileManager.default.removeItem(at: outputURL)
             }
-            self._completionHandler?(.failure(NextLevelSessionExporterError.cancelled))
+            await MainActor.run {
+                completionHandler?(.failure(NextLevelSessionExporterError.cancelled))
+            }
             return
         }
 
-        guard let reader = self._reader else {
-            self._completionHandler?(.failure(NextLevelSessionExporterError.setupFailure))
-            self._completionHandler = nil
+        guard let reader = reader else {
+            await MainActor.run {
+                completionHandler?(.failure(NextLevelSessionExporterError.setupFailure))
+            }
+            await exportState.clearCompletionHandler()
             return
         }
 
-        guard let writer = self._writer else {
-            self._completionHandler?(.failure(NextLevelSessionExporterError.setupFailure))
-            self._completionHandler = nil
+        guard let writer = writer else {
+            await MainActor.run {
+                completionHandler?(.failure(NextLevelSessionExporterError.setupFailure))
+            }
+            await exportState.clearCompletionHandler()
             return
         }
 
         switch reader.status {
         case .failed:
             guard let outputURL = self.outputURL else {
-                self._completionHandler?(.failure(reader.error ?? NextLevelSessionExporterError.readingFailure))
+                await MainActor.run {
+                    completionHandler?(.failure(reader.error ?? NextLevelSessionExporterError.readingFailure))
+                }
                 return
             }
             if FileManager.default.fileExists(atPath: outputURL.absoluteString) {
                 try? FileManager.default.removeItem(at: outputURL)
             }
-            self._completionHandler?(.failure(reader.error ?? NextLevelSessionExporterError.readingFailure))
+            await MainActor.run {
+                completionHandler?(.failure(reader.error ?? NextLevelSessionExporterError.readingFailure))
+            }
             return
         default:
             // do nothing
@@ -631,25 +886,32 @@ extension NextLevelSessionExporter {
         switch writer.status {
         case .failed:
             guard let outputURL = self.outputURL else {
-                self._completionHandler?(.failure(writer.error ?? NextLevelSessionExporterError.writingFailure))
+                await MainActor.run {
+                    completionHandler?(.failure(writer.error ?? NextLevelSessionExporterError.writingFailure))
+                }
                 return
             }
             if FileManager.default.fileExists(atPath: outputURL.absoluteString) {
                 try? FileManager.default.removeItem(at: outputURL)
             }
-            self._completionHandler?(.failure(writer.error ?? NextLevelSessionExporterError.writingFailure))
+            await MainActor.run {
+                completionHandler?(.failure(writer.error ?? NextLevelSessionExporterError.writingFailure))
+            }
             return
         default:
             // do nothing
             break
         }
 
-        self._completionHandler?(.success(self.status))
-        self._completionHandler = nil
+        let finalStatus = await self.status
+        await MainActor.run {
+            completionHandler?(.success(finalStatus))
+        }
+            await exportState.clearCompletionHandler()
     }
 
     // subclass and add more checks, if needed
-    open func validateVideoOutputConfiguration() -> Bool {
+    public func validateVideoOutputConfiguration() -> Bool {
         guard let videoOutputConfiguration = self.videoOutputConfiguration else {
             return false
         }
@@ -661,22 +923,6 @@ extension NextLevelSessionExporter {
         }
 
         return true
-    }
-
-    internal func reset() {
-        self._progress = 0
-        self._writer = nil
-        self._reader = nil
-        self._pixelBufferAdaptor = nil
-
-        self._videoOutput = nil
-        self._audioOutput = nil
-        self._videoInput = nil
-        self._audioInput = nil
-
-        self._progressHandler = nil
-        self._renderHandler = nil
-        self._completionHandler = nil
     }
 
 }
@@ -696,6 +942,7 @@ extension AVAsset {
     ///   - audioOutputConfiguration: audio output configuration
     ///   - progressHandler: progress fraction handler
     ///   - completionHandler: completion handler
+    @available(*, deprecated, message: "Use async export methods instead")
     public func nextlevel_export(outputFileType: AVFileType? = AVFileType.mp4,
                                    outputURL: URL,
                                    metadata: [AVMetadataItem]? = nil,
@@ -704,12 +951,87 @@ extension AVAsset {
                                    audioOutputConfiguration: [String : Any],
                                    progressHandler: NextLevelSessionExporter.ProgressHandler? = nil,
                                    completionHandler: NextLevelSessionExporter.CompletionHandler? = nil) {
-        let exporter = NextLevelSessionExporter(withAsset: self)
-        exporter.outputFileType = outputFileType
-        exporter.outputURL = outputURL
-        exporter.videoOutputConfiguration = videoOutputConfiguration
-        exporter.audioOutputConfiguration = audioOutputConfiguration
+        let exporter = NextLevelSessionExporter(
+            asset: self,
+            outputURL: outputURL,
+            outputFileType: outputFileType,
+            metadata: metadata,
+            videoInputConfiguration: videoInputConfiguration,
+            videoOutputConfiguration: videoOutputConfiguration,
+            audioOutputConfiguration: audioOutputConfiguration
+        )
         exporter.export(progressHandler: progressHandler, completionHandler: completionHandler)
+    }
+    
+    // MARK: - Modern async/await convenience methods
+    
+    /// Initiates an async NextLevelSessionExport on the asset with progress reporting.
+    ///
+    /// - Parameters:
+    ///   - outputFileType: type of resulting file to create
+    ///   - outputURL: location of resulting file
+    ///   - metadata: data to embed in the result
+    ///   - videoInputConfiguration: video input configuration
+    ///   - videoOutputConfiguration: video output configuration
+    ///   - audioOutputConfiguration: audio output configuration
+    ///   - renderHandler: optional closure for custom frame rendering
+    /// - Returns: AsyncThrowingStream of ExportProgress updates
+    /// - Throws: NextLevelSessionExporterError on export failure
+    @available(iOS 15.0, macOS 12.0, *)
+    @discardableResult
+    public func nextlevel_exportAsync(
+        outputFileType: AVFileType? = AVFileType.mp4,
+        outputURL: URL,
+        metadata: [AVMetadataItem]? = nil,
+        videoInputConfiguration: [String : Any]? = nil,
+        videoOutputConfiguration: [String : Any],
+        audioOutputConfiguration: [String : Any],
+        renderHandler: (@Sendable (RenderFrameData) async -> Void)? = nil
+    ) -> AsyncThrowingStream<ExportProgress, Error> {
+        let exporter = NextLevelSessionExporter(
+            asset: self,
+            outputURL: outputURL,
+            outputFileType: outputFileType,
+            metadata: metadata,
+            videoInputConfiguration: videoInputConfiguration,
+            videoOutputConfiguration: videoOutputConfiguration,
+            audioOutputConfiguration: audioOutputConfiguration
+        )
+        return exporter.export(renderHandler: renderHandler)
+    }
+    
+    /// Simplified async NextLevelSessionExport that returns only the final status.
+    ///
+    /// - Parameters:
+    ///   - outputFileType: type of resulting file to create
+    ///   - outputURL: location of resulting file
+    ///   - metadata: data to embed in the result
+    ///   - videoInputConfiguration: video input configuration
+    ///   - videoOutputConfiguration: video output configuration
+    ///   - audioOutputConfiguration: audio output configuration
+    ///   - renderHandler: optional closure for custom frame rendering
+    /// - Returns: Final export status
+    /// - Throws: NextLevelSessionExporterError on export failure
+    @available(iOS 15.0, macOS 12.0, *)
+    public func nextlevel_exportAwait(
+        outputFileType: AVFileType? = AVFileType.mp4,
+        outputURL: URL,
+        metadata: [AVMetadataItem]? = nil,
+        videoInputConfiguration: [String : Any]? = nil,
+        videoOutputConfiguration: [String : Any],
+        audioOutputConfiguration: [String : Any],
+        renderHandler: (@Sendable (RenderFrameData) async -> Void)? = nil
+    ) async throws -> AVAssetExportSession.Status {
+        let exporter = NextLevelSessionExporter(
+            asset: self,
+            outputURL: outputURL,
+            outputFileType: outputFileType,
+            metadata: metadata,
+            videoInputConfiguration: videoInputConfiguration,
+            videoOutputConfiguration: videoOutputConfiguration,
+            audioOutputConfiguration: audioOutputConfiguration
+        )
+        return try await exporter.exportAsync(renderHandler: renderHandler)
     }
 
 }

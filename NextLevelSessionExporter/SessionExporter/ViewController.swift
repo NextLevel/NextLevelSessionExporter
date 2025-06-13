@@ -1,6 +1,6 @@
 //
 //  ViewController.swift
-//  NextLevelSessionExporter (http://nextlevel.engineering/)
+//  NextLevelSessionExporter
 //
 //  Copyright (c) 2016-present patrick piemonte (http://patrickpiemonte.com)
 //
@@ -28,94 +28,200 @@ import AVFoundation
 import Photos
 
 class ViewController: UIViewController {
+    
+    private var exportTask: Task<Void, Never>?
 
     override func viewDidLoad() {
         super.viewDidLoad()
-
-        // Note: alternatively, one can use asset.nextlevel_export(...)
-        //    .nextlevel_export(outputURL: tmpURL, videoOutputConfiguration: videoOutputConfig, audioOutputConfiguration: audioOutputConfig) {
-        //    }
         
-        let asset = AVAsset(url: Bundle.main.url(forResource: "TestVideo", withExtension: "mov")!)
+        // Start async export using modern API
+        exportTask = Task {
+            await performModernExport()
+        }
+    }
+    
+    deinit {
+        exportTask?.cancel()
+    }
+    
+    // Modern async/await export example
+    private func performModernExport() async {
+        guard let testVideoURL = Bundle.main.url(forResource: "TestVideo", withExtension: "mov") else {
+            print("Test video not found")
+            return
+        }
         
-        let exporter = NextLevelSessionExporter(withAsset: asset)
-        exporter.outputFileType = AVFileType.mp4
+        let asset = AVAsset(url: testVideoURL)
+        
         let tmpURL = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
             .appendingPathComponent(ProcessInfo().globallyUniqueString)
             .appendingPathExtension("mp4")
-        exporter.outputURL = tmpURL
-        
+            
         let compressionDict: [String: Any] = [
             AVVideoAverageBitRateKey: NSNumber(integerLiteral: 6000000),
             AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel as String,
         ]
-        exporter.videoOutputConfiguration = [
-            AVVideoCodecKey: AVVideoCodecH264,
+        
+        let videoOutputConfiguration = [
+            AVVideoCodecKey: AVVideoCodecType.h264,
             AVVideoWidthKey: NSNumber(integerLiteral: 1920),
             AVVideoHeightKey: NSNumber(integerLiteral: 1080),
             AVVideoScalingModeKey: AVVideoScalingModeResizeAspectFill,
             AVVideoCompressionPropertiesKey: compressionDict
-        ]
-        exporter.audioOutputConfiguration = [
+        ] as [String : Any]
+        
+        let audioOutputConfiguration = [
             AVFormatIDKey: kAudioFormatMPEG4AAC,
             AVEncoderBitRateKey: NSNumber(integerLiteral: 128000),
             AVNumberOfChannelsKey: NSNumber(integerLiteral: 2),
             AVSampleRateKey: NSNumber(value: Float(44100))
-        ]
+        ] as [String : Any]
         
-        exporter.export(progressHandler: { (progress) in
-            print(progress)
-        }, completionHandler: { result in
-            switch result {
-            case .success(let status):
+        do {
+            // Method 1: Using the convenient AVAsset extension with async/await
+            if #available(iOS 15.0, *) {
+                print("Starting modern async export...")
+                
+                let status = try await asset.nextlevel_exportAwait(
+                    outputURL: tmpURL,
+                    videoOutputConfiguration: videoOutputConfiguration,
+                    audioOutputConfiguration: audioOutputConfiguration
+                )
+                
                 switch status {
                 case .completed:
-                    print("NextLevelSessionExporter, export completed, \(exporter.outputURL?.description ?? "")")
-                    self.saveVideo(withURL: exporter.outputURL!)
-                    break
+                    print("NextLevelSessionExporter, export completed, \(tmpURL.description)")
+                    await saveVideo(withURL: tmpURL)
                 default:
                     print("NextLevelSessionExporter, did not complete \(status)")
-                    break
                 }
-                break
-            case .failure(let error):
-                print("NextLevelSessionExporter, failed to export \(error)")
-                break
+            } else {
+                // Fallback to legacy API for older iOS versions
+                await performLegacyExport(asset: asset, outputURL: tmpURL, 
+                                        videoConfig: videoOutputConfiguration, 
+                                        audioConfig: audioOutputConfiguration)
             }
-        })
+        } catch {
+            print("NextLevelSessionExporter, failed to export \(error)")
+        }
     }
     
-    private func saveVideo(withURL url: URL) {
-        PHPhotoLibrary.shared().performChanges({
-            let albumAssetCollection = self.albumAssetCollection(withTitle: "Next Level")
-            if albumAssetCollection == nil {
-                let changeRequest = PHAssetCollectionChangeRequest.creationRequestForAssetCollection(withTitle: "Next Level")
-                let _ = changeRequest.placeholderForCreatedAssetCollection
-            }}, completionHandler: { (success1: Bool, error1: Error?) in
-                if let albumAssetCollection = self.albumAssetCollection(withTitle: "Next Level") {
-                    PHPhotoLibrary.shared().performChanges({
-                        if let assetChangeRequest = PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url) {
-                            let assetCollectionChangeRequest = PHAssetCollectionChangeRequest(for: albumAssetCollection)
-                            let enumeration: NSArray = [assetChangeRequest.placeholderForCreatedAsset!]
-                            assetCollectionChangeRequest?.addAssets(enumeration)
-                        }
-                    }, completionHandler: { (success2: Bool, error2: Error?) in
-                        if success2 == true {
-                            // prompt that the video has been saved
-                            let alertController = UIAlertController(title: "Video Saved!", message: "Saved to the camera roll.", preferredStyle: .alert)
-                            let okAction = UIAlertAction(title: "OK", style: .default, handler: nil)
-                            alertController.addAction(okAction)
-                            self.present(alertController, animated: true, completion: nil)
-                        } else {
-                            // prompt that the video has been saved
-                            let alertController = UIAlertController(title: "Something failed!", message: "Something failed!", preferredStyle: .alert)
-                            let okAction = UIAlertAction(title: "OK", style: .default, handler: nil)
-                            alertController.addAction(okAction)
-                            self.present(alertController, animated: true, completion: nil)
-                        }
-                    })
+    // Example using async progress monitoring
+    private func performExportWithProgress() async {
+        guard let testVideoURL = Bundle.main.url(forResource: "TestVideo", withExtension: "mov") else {
+            print("Test video not found")
+            return
+        }
+        
+        let asset = AVAsset(url: testVideoURL)
+        let tmpURL = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent(ProcessInfo().globallyUniqueString)
+            .appendingPathExtension("mp4")
+            
+        let videoOutputConfiguration = [
+            AVVideoCodecKey: AVVideoCodecType.h264,
+            AVVideoWidthKey: NSNumber(integerLiteral: 1920),
+            AVVideoHeightKey: NSNumber(integerLiteral: 1080)
+        ] as [String : Any]
+        
+        let audioOutputConfiguration = [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVEncoderBitRateKey: NSNumber(integerLiteral: 128000)
+        ] as [String : Any]
+        
+        if #available(iOS 15.0, *) {
+            do {
+                // Method 2: Using AsyncThrowingStream for progress monitoring
+                for try await progress in asset.nextlevel_exportAsync(
+                    outputURL: tmpURL,
+                    videoOutputConfiguration: videoOutputConfiguration,
+                    audioOutputConfiguration: audioOutputConfiguration
+                ) {
+                    print("Export progress: \(progress.progress * 100)%")
+                    
+                    // Update UI on main thread if needed
+                    await MainActor.run {
+                        // Update progress UI here
+                    }
+                    
+                    if progress.progress >= 1.0 {
+                        print("Export completed!")
+                        await saveVideo(withURL: tmpURL)
+                        break
+                    }
                 }
-        })
+            } catch {
+                print("Export failed: \(error)")
+            }
+        }
+    }
+    
+    // Legacy export method for backwards compatibility
+    private func performLegacyExport(asset: AVAsset, outputURL: URL, videoConfig: [String: Any], audioConfig: [String: Any]) async {
+        await withCheckedContinuation { continuation in
+            let exporter = NextLevelSessionExporter(
+                asset: asset,
+                outputURL: outputURL,
+                outputFileType: .mp4,
+                videoOutputConfiguration: videoConfig,
+                audioOutputConfiguration: audioConfig
+            )
+            
+            exporter.export(progressHandler: { (progress) in
+                print("Legacy export progress: \(progress)")
+            }, completionHandler: { result in
+                switch result {
+                case .success(let status):
+                    switch status {
+                    case .completed:
+                        print("Legacy export completed")
+                        Task {
+                            await self.saveVideo(withURL: outputURL)
+                        }
+                    default:
+                        print("Legacy export did not complete \(status)")
+                    }
+                case .failure(let error):
+                    print("Legacy export failed \(error)")
+                }
+                continuation.resume()
+            })
+        }
+    }
+    
+    private func saveVideo(withURL url: URL) async {
+        do {
+            // Modern async photo library operations
+            try await PHPhotoLibrary.shared().performChanges {
+                // Create album if it doesn't exist
+                if self.albumAssetCollection(withTitle: "Next Level") == nil {
+                    PHAssetCollectionChangeRequest.creationRequestForAssetCollection(withTitle: "Next Level")
+                }
+            }
+            
+            // Add video to album
+            if let albumAssetCollection = self.albumAssetCollection(withTitle: "Next Level") {
+                try await PHPhotoLibrary.shared().performChanges {
+                    if let assetChangeRequest = PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url) {
+                        let assetCollectionChangeRequest = PHAssetCollectionChangeRequest(for: albumAssetCollection)
+                        assetCollectionChangeRequest?.addAssets([assetChangeRequest.placeholderForCreatedAsset!] as NSArray)
+                    }
+                }
+                
+                await showAlert(title: "Video Saved!", message: "Saved to the camera roll.")
+            }
+        } catch {
+            print("Failed to save video: \(error)")
+            await showAlert(title: "Something failed!", message: "Failed to save video: \(error.localizedDescription)")
+        }
+    }
+    
+    @MainActor
+    private func showAlert(title: String, message: String) {
+        let alertController = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        let okAction = UIAlertAction(title: "OK", style: .default, handler: nil)
+        alertController.addAction(okAction)
+        present(alertController, animated: true, completion: nil)
     }
 
     private func albumAssetCollection(withTitle title: String) -> PHAssetCollection? {
