@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep:*)",
+      "Bash(rg:*)",
+      "Bash(git tag:*)",
+      "Bash(sudo gem install:*)",
+      "Bash(gem install:*)",
+      "Bash(brew install:*)",
+      "Bash(pod:*)",
+      "Bash(swift build)",
+      "Bash(swift build:*)",
+      "Bash(if [ -f Makefile ])",
+      "Bash(elif [ -f Fastfile ])",
+      "Bash(then head -20 Fastfile)",
+      "Bash(fi)"
+    ],
+    "deny": []
+  }
+}
