@@ -27,32 +27,53 @@ import AVFoundation
 // MARK: - types
 
 /// Session export errors.
-public enum NextLevelSessionExporterError: Error, CustomStringConvertible {
-    case setupFailure
-    case readingFailure
-    case writingFailure
+public enum NextLevelSessionExporterError: LocalizedError, Sendable {
+    case setupFailure(String)
+    case readingFailure(String)
+    case writingFailure(String)
     case cancelled
+    case invalidConfiguration(String)
 
-    public var description: String {
-        get {
-            switch self {
-            case .setupFailure:
-                return "Setup failure"
-            case .readingFailure:
-                return "Reading failure"
-            case .writingFailure:
-                return "Writing failure"
-            case .cancelled:
-                return "Cancelled"
-            }
+    public var errorDescription: String? {
+        switch self {
+        case .setupFailure(let message):
+            return "Export setup failed: \(message)"
+        case .readingFailure(let message):
+            return "Failed to read media: \(message)"
+        case .writingFailure(let message):
+            return "Failed to write media: \(message)"
+        case .cancelled:
+            return "Export was cancelled"
+        case .invalidConfiguration(let message):
+            return "Invalid configuration: \(message)"
         }
+    }
+
+    public var recoverySuggestion: String? {
+        switch self {
+        case .setupFailure:
+            return "Ensure the asset is accessible and output URL is writable"
+        case .readingFailure:
+            return "Verify the source asset is not corrupted and is a supported format"
+        case .writingFailure:
+            return "Check available disk space and file permissions"
+        case .invalidConfiguration:
+            return "Review video and audio output configuration settings"
+        case .cancelled:
+            return nil
+        }
+    }
+
+    // Maintain backwards compatibility with CustomStringConvertible
+    public var description: String {
+        return errorDescription ?? "Unknown error"
     }
 }
 
 // MARK: - NextLevelSessionExporter
 
 /// 🔄 NextLevelSessionExporter, export and transcode media in Swift
-open class NextLevelSessionExporter: NSObject {
+open class NextLevelSessionExporter: NSObject, @unchecked Sendable {
 
     /// Input asset for export, provided when initialized.
     public var asset: AVAsset?
@@ -176,13 +197,13 @@ open class NextLevelSessionExporter: NSObject {
 extension NextLevelSessionExporter {
 
     /// Completion handler type for when an export finishes.
-    public typealias CompletionHandler = (Swift.Result<AVAssetExportSession.Status, Error>) -> Void
+    public typealias CompletionHandler = @Sendable (Swift.Result<AVAssetExportSession.Status, Error>) -> Void
 
     /// Progress handler type
-    public typealias ProgressHandler = (_ progress: Float) -> Void
+    public typealias ProgressHandler = @Sendable (_ progress: Float) -> Void
 
     /// Render handler type for frame processing
-    public typealias RenderHandler = (_ renderFrame: CVPixelBuffer, _ presentationTime: CMTime, _ resultingBuffer: CVPixelBuffer) -> Void
+    public typealias RenderHandler = @Sendable (_ renderFrame: CVPixelBuffer, _ presentationTime: CMTime, _ resultingBuffer: CVPixelBuffer) -> Void
 
     /// Initiates an export session.
     ///
@@ -196,7 +217,7 @@ extension NextLevelSessionExporter {
               let outputFileType = self.outputFileType else {
             print("NextLevelSessionExporter, an asset and output URL are required for encoding")
             DispatchQueue.main.async {
-                self._completionHandler?(.failure(NextLevelSessionExporterError.setupFailure))
+                self._completionHandler?(.failure(NextLevelSessionExporterError.setupFailure("Asset, output URL, and file type are required")))
             }
             return
         }
@@ -218,16 +239,16 @@ extension NextLevelSessionExporter {
         } catch {
             print("NextLevelSessionExporter, could not setup a reader for the provided asset \(asset)")
             DispatchQueue.main.async {
-                self._completionHandler?(.failure(NextLevelSessionExporterError.setupFailure))
+                self._completionHandler?(.failure(NextLevelSessionExporterError.setupFailure("Could not create AVAssetReader: \(error.localizedDescription)")))
             }
         }
 
         do {
             self._writer = try AVAssetWriter(outputURL: outputURL, fileType: outputFileType)
         } catch {
-            print("NextLevelSessionExporter, could not setup a reader for the provided asset \(asset)")
+            print("NextLevelSessionExporter, could not setup a writer for the provided output URL \(outputURL)")
             DispatchQueue.main.async {
-                self._completionHandler?(.failure(NextLevelSessionExporterError.setupFailure))
+                self._completionHandler?(.failure(NextLevelSessionExporterError.setupFailure("Could not create AVAssetWriter: \(error.localizedDescription)")))
             }
         }
 
@@ -235,7 +256,7 @@ extension NextLevelSessionExporter {
         if let _ = self.videoOutputConfiguration, self.validateVideoOutputConfiguration() == false {
             print("NextLevelSessionExporter, could not setup with the specified video output configuration")
             DispatchQueue.main.async {
-                self._completionHandler?(.failure(NextLevelSessionExporterError.setupFailure))
+                self._completionHandler?(.failure(NextLevelSessionExporterError.invalidConfiguration("Video output configuration is missing width or height")))
             }
         }
 
@@ -430,44 +451,49 @@ extension NextLevelSessionExporter {
     // called on the inputQueue
     internal func encode(readySamplesFromReaderOutput output: AVAssetReaderOutput, toWriterInput input: AVAssetWriterInput) -> Bool {
         while input.isReadyForMoreMediaData {
-            guard self._reader?.status == .reading && self._writer?.status == .writing,
-                  let sampleBuffer = output.copyNextSampleBuffer() else {
-                input.markAsFinished()
-                return false
-            }
+            // Wrap in autoreleasepool to prevent memory accumulation during long exports (Issue #56)
+            let shouldContinue = autoreleasepool { () -> Bool in
+                guard self._reader?.status == .reading && self._writer?.status == .writing,
+                      let sampleBuffer = output.copyNextSampleBuffer() else {
+                    input.markAsFinished()
+                    return false
+                }
 
-            var handled = false
-            var error = false
-            if self._videoOutput == output {
-                // determine progress
-                self._lastSamplePresentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer) - self.timeRange.start
-                let progress = self._duration == 0 ? 1 : Float(CMTimeGetSeconds(self._lastSamplePresentationTime) / self._duration)
-                self.updateProgress(progress: progress)
+                var handled = false
+                var error = false
+                if self._videoOutput == output {
+                    // determine progress
+                    self._lastSamplePresentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer) - self.timeRange.start
+                    let progress = self._duration == 0 ? 1 : Float(CMTimeGetSeconds(self._lastSamplePresentationTime) / self._duration)
+                    self.updateProgress(progress: progress)
 
-                // prepare progress frames
-                if let pixelBufferAdaptor = self._pixelBufferAdaptor,
-                    let pixelBufferPool = pixelBufferAdaptor.pixelBufferPool,
-                    let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
+                    // prepare progress frames
+                    if let pixelBufferAdaptor = self._pixelBufferAdaptor,
+                        let pixelBufferPool = pixelBufferAdaptor.pixelBufferPool,
+                        let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
 
-                    var toRenderBuffer: CVPixelBuffer? = nil
-                    let result = CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pixelBufferPool, &toRenderBuffer)
-                    if result == kCVReturnSuccess {
-                        if let toBuffer = toRenderBuffer {
-                            self._renderHandler?(pixelBuffer, self._lastSamplePresentationTime, toBuffer)
-                            if pixelBufferAdaptor.append(toBuffer, withPresentationTime:self._lastSamplePresentationTime) == false {
-                                error = true
+                        var toRenderBuffer: CVPixelBuffer? = nil
+                        let result = CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pixelBufferPool, &toRenderBuffer)
+                        if result == kCVReturnSuccess {
+                            if let toBuffer = toRenderBuffer {
+                                self._renderHandler?(pixelBuffer, self._lastSamplePresentationTime, toBuffer)
+                                if pixelBufferAdaptor.append(toBuffer, withPresentationTime:self._lastSamplePresentationTime) == false {
+                                    error = true
+                                }
+                                handled = true
                             }
-                            handled = true
                         }
                     }
                 }
+
+                if handled == false && input.append(sampleBuffer) == false {
+                    error = true
+                }
+
+                return !error
             }
 
-            if handled == false && input.append(sampleBuffer) == false {
-                error = true
-            }
-
-            if error {
+            if !shouldContinue {
                 return false
             }
         }
@@ -502,12 +528,15 @@ extension NextLevelSessionExporter {
 
             if let videoConfiguration = self.videoOutputConfiguration {
 
-                let videoWidth = videoConfiguration[AVVideoWidthKey] as? NSNumber
-                let videoHeight = videoConfiguration[AVVideoHeightKey] as? NSNumber
+                guard let videoWidth = videoConfiguration[AVVideoWidthKey] as? NSNumber,
+                      let videoHeight = videoConfiguration[AVVideoHeightKey] as? NSNumber else {
+                    // If width/height not specified, use natural size
+                    videoComposition.renderSize = videoTrack.naturalSize
+                    return videoComposition
+                }
 
-                // validated to be non-nil byt this point
-                let width = videoWidth!.intValue
-                let height = videoHeight!.intValue
+                let width = videoWidth.intValue
+                let height = videoHeight.intValue
 
                 let targetSize = CGSize(width: width, height: height)
                 var naturalSize = videoTrack.naturalSize
@@ -601,13 +630,13 @@ extension NextLevelSessionExporter {
         }
 
         guard let reader = self._reader else {
-            self._completionHandler?(.failure(NextLevelSessionExporterError.setupFailure))
+            self._completionHandler?(.failure(NextLevelSessionExporterError.setupFailure("Asset reader was not initialized")))
             self._completionHandler = nil
             return
         }
 
         guard let writer = self._writer else {
-            self._completionHandler?(.failure(NextLevelSessionExporterError.setupFailure))
+            self._completionHandler?(.failure(NextLevelSessionExporterError.setupFailure("Asset writer was not initialized")))
             self._completionHandler = nil
             return
         }
@@ -615,13 +644,15 @@ extension NextLevelSessionExporter {
         switch reader.status {
         case .failed:
             guard let outputURL = self.outputURL else {
-                self._completionHandler?(.failure(reader.error ?? NextLevelSessionExporterError.readingFailure))
+                let errorMessage = reader.error?.localizedDescription ?? "Unknown reading error"
+                self._completionHandler?(.failure(reader.error ?? NextLevelSessionExporterError.readingFailure(errorMessage)))
                 return
             }
             if FileManager.default.fileExists(atPath: outputURL.absoluteString) {
                 try? FileManager.default.removeItem(at: outputURL)
             }
-            self._completionHandler?(.failure(reader.error ?? NextLevelSessionExporterError.readingFailure))
+            let errorMessage = reader.error?.localizedDescription ?? "Asset reading failed"
+            self._completionHandler?(.failure(reader.error ?? NextLevelSessionExporterError.readingFailure(errorMessage)))
             return
         default:
             // do nothing
@@ -631,13 +662,15 @@ extension NextLevelSessionExporter {
         switch writer.status {
         case .failed:
             guard let outputURL = self.outputURL else {
-                self._completionHandler?(.failure(writer.error ?? NextLevelSessionExporterError.writingFailure))
+                let errorMessage = writer.error?.localizedDescription ?? "Unknown writing error"
+                self._completionHandler?(.failure(writer.error ?? NextLevelSessionExporterError.writingFailure(errorMessage)))
                 return
             }
             if FileManager.default.fileExists(atPath: outputURL.absoluteString) {
                 try? FileManager.default.removeItem(at: outputURL)
             }
-            self._completionHandler?(.failure(writer.error ?? NextLevelSessionExporterError.writingFailure))
+            let errorMessage = writer.error?.localizedDescription ?? "Asset writing failed"
+            self._completionHandler?(.failure(writer.error ?? NextLevelSessionExporterError.writingFailure(errorMessage)))
             return
         default:
             // do nothing
@@ -649,7 +682,7 @@ extension NextLevelSessionExporter {
     }
 
     // subclass and add more checks, if needed
-    open func validateVideoOutputConfiguration() -> Bool {
+    public func validateVideoOutputConfiguration() -> Bool {
         guard let videoOutputConfiguration = self.videoOutputConfiguration else {
             return false
         }
@@ -679,6 +712,122 @@ extension NextLevelSessionExporter {
         self._completionHandler = nil
     }
 
+}
+
+// MARK: - Modern Async/Await API
+
+extension NextLevelSessionExporter {
+
+    /// Export progress update event
+    public enum ExportEvent: Sendable {
+        case progress(Float)
+        case completed(URL)
+    }
+
+    /// Exports the asset using modern async/await with progress updates via AsyncSequence.
+    ///
+    /// This is the modern API for exporting media. It provides progress updates through an AsyncSequence
+    /// and supports Task cancellation.
+    ///
+    /// - Parameter renderHandler: Optional handler for processing video frames during export
+    /// - Returns: An AsyncThrowingStream that yields progress updates and completion
+    ///
+    /// - Throws: NextLevelSessionExporterError if export fails
+    ///
+    /// ## Example
+    /// ```swift
+    /// let exporter = NextLevelSessionExporter(withAsset: asset)
+    /// exporter.outputURL = outputURL
+    /// exporter.videoOutputConfiguration = videoConfig
+    /// exporter.audioOutputConfiguration = audioConfig
+    ///
+    /// for try await event in exporter.exportAsync() {
+    ///     switch event {
+    ///     case .progress(let progress):
+    ///         print("Progress: \(progress * 100)%")
+    ///     case .completed(let url):
+    ///         print("Export completed: \(url)")
+    ///     }
+    /// }
+    /// ```
+    @available(iOS 15.0, macOS 12.0, *)
+    public func exportAsync(renderHandler: RenderHandler? = nil) -> AsyncThrowingStream<ExportEvent, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task { @MainActor in
+                // Export with progress and completion handlers
+                self.export(
+                    renderHandler: renderHandler,
+                    progressHandler: { progress in
+                        continuation.yield(.progress(progress))
+                    },
+                    completionHandler: { result in
+                        switch result {
+                        case .success:
+                            if let outputURL = self.outputURL {
+                                continuation.yield(.completed(outputURL))
+                            }
+                            continuation.finish()
+                        case .failure(let error):
+                            continuation.finish(throwing: error)
+                        }
+                    }
+                )
+            }
+
+            continuation.onTermination = { @Sendable _ in
+                task.cancel()
+                Task { @MainActor in
+                    self.cancelExport()
+                }
+            }
+        }
+    }
+
+    /// Simplified async export that returns the URL directly.
+    ///
+    /// Use this method when you don't need progress updates.
+    ///
+    /// - Parameters:
+    ///   - renderHandler: Optional handler for processing video frames during export
+    ///   - progress: Optional closure called with progress updates (0.0 to 1.0)
+    ///
+    /// - Returns: The URL of the exported file
+    ///
+    /// - Throws: NextLevelSessionExporterError if export fails
+    ///
+    /// ## Example
+    /// ```swift
+    /// let exporter = NextLevelSessionExporter(withAsset: asset)
+    /// exporter.outputURL = outputURL
+    /// exporter.videoOutputConfiguration = videoConfig
+    /// exporter.audioOutputConfiguration = audioConfig
+    ///
+    /// let outputURL = try await exporter.export { progress in
+    ///     print("Progress: \(progress * 100)%")
+    /// }
+    /// print("Export completed: \(outputURL)")
+    /// ```
+    @available(iOS 15.0, macOS 12.0, *)
+    public func export(renderHandler: RenderHandler? = nil, progress progressCallback: ProgressHandler? = nil) async throws -> URL {
+        return try await withCheckedThrowingContinuation { continuation in
+            self.export(
+                renderHandler: renderHandler,
+                progressHandler: progressCallback,
+                completionHandler: { result in
+                    switch result {
+                    case .success:
+                        if let outputURL = self.outputURL {
+                            continuation.resume(returning: outputURL)
+                        } else {
+                            continuation.resume(throwing: NextLevelSessionExporterError.setupFailure("Output URL not set"))
+                        }
+                    case .failure(let error):
+                        continuation.resume(throwing: error)
+                    }
+                }
+            )
+        }
+    }
 }
 
 // MARK: - AVAsset extension

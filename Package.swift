@@ -1,4 +1,4 @@
-// swift-tools-version:5.3
+// swift-tools-version:6.0
 //
 //  Package.swift
 //  NextLevelSessionExporter (http://nextlevel.engineering/)
@@ -28,7 +28,7 @@ import PackageDescription
 let package = Package(
     name: "NextLevelSessionExporter",
     platforms: [
-      .iOS(.v13)
+      .iOS(.v15)
     ],
     products: [
       .library(name: "NextLevelSessionExporter", targets: ["SessionExporter"])
@@ -36,8 +36,11 @@ let package = Package(
     targets: [
       .target(
           name: "SessionExporter",
-          path: "Sources"
+          path: "Sources",
+          swiftSettings: [
+              .enableUpcomingFeature("StrictConcurrency")
+          ]
       )
     ],
-    swiftLanguageVersions: [.v5]
+    swiftLanguageVersions: [.version("6")]
 )
