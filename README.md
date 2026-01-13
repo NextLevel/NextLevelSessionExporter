@@ -376,6 +376,47 @@ try await exporter.export()
 
 ## Troubleshooting
 
+### Error -11819 "Cannot Complete Action" (iOS 14.5+)
+
+**Problem:** Export fails with `AVFoundationErrorDomain Code=-11819 "Cannot Complete Action"`, especially on iOS 14.5.
+
+**Cause:** This is an **iOS system-level bug** where media daemons crash during export operations. It's not a library issue but an Apple bug that affects `AVAssetReader`/`AVAssetWriter` operations.
+
+**Solutions:**
+
+1. **Implement Retry Logic** (recommended):
+```swift
+func exportWithRetry(maxAttempts: Int = 3) async throws -> URL {
+    var lastError: Error?
+
+    for attempt in 1...maxAttempts {
+        do {
+            let url = try await exporter.export()
+            return url
+        } catch let error as NSError where error.code == -11819 {
+            lastError = error
+            print("Attempt \(attempt) failed with -11819, retrying...")
+            try await Task.sleep(nanoseconds: 500_000_000) // 0.5s delay
+            continue
+        } catch {
+            throw error // Other errors, don't retry
+        }
+    }
+
+    throw lastError ?? NextLevelSessionExporterError.writingFailure("Export failed after \(maxAttempts) attempts")
+}
+```
+
+2. **Reduce Complexity**: Lower resolution, bitrate, or remove video composition if using CoreAnimation tools
+
+3. **Update iOS**: The issue is less frequent on iOS 15+
+
+4. **Report to Apple**: File a Feedback Assistant report with sysdiagnose if this occurs frequently
+
+**References:**
+- [Apple Forums Thread](https://developer.apple.com/forums/thread/679862)
+- [Radar: FB8815719](https://openradar.appspot.com/FB8815719)
+
 ### Export Fails with "Reading Failure"
 
 **Problem:** Export fails when reading the source asset.
