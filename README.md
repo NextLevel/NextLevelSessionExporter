@@ -36,7 +36,7 @@ Add the following to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/nextlevel/NextLevelSessionExporter", from: "1.0.0")
+    .package(url: "https://github.com/nextlevel/NextLevelSessionExporter", from: "1.0.1")
 ]
 ```
 
@@ -45,7 +45,7 @@ Or add it directly in Xcode: **File → Add Package Dependencies...**
 ### CocoaPods
 
 ```ruby
-pod "NextLevelSessionExporter", "~> 1.0.0"
+pod "NextLevelSessionExporter", "~> 1.0.1"
 ```
 
 ### Manual Integration
