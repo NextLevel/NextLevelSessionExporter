@@ -374,6 +374,26 @@ defer { await UIApplication.shared.endBackgroundTask(taskID) }
 try await exporter.export()
 ```
 
+### Working with Photos Library
+
+When exporting videos from the user's photo library, copy the file to your app's directory first to avoid permission issues:
+
+```swift
+// ⚠️ NOT RECOMMENDED: Direct PHAsset access may cause cancelled errors
+let phAsset = // ... from photo library
+let avAsset = AVAsset(url: phAsset.url) // May fail!
+
+// ✅ RECOMMENDED: Copy to app directory first
+let tempURL = FileManager.default.temporaryDirectory
+    .appendingPathComponent("video.mov")
+
+// Export PHAsset to temp file, then create AVAsset
+let avAsset = AVAsset(url: tempURL)
+let exporter = NextLevelSessionExporter(withAsset: avAsset)
+```
+
+See the [Troubleshooting section](#export-fails-with-cancelled-error-issue-37) for complete implementation.
+
 ## Troubleshooting
 
 ### Error -11819 "Cannot Complete Action" (iOS 14.5+)
@@ -417,6 +437,83 @@ func exportWithRetry(maxAttempts: Int = 3) async throws -> URL {
 - [Apple Forums Thread](https://developer.apple.com/forums/thread/679862)
 - [Radar: FB8815719](https://openradar.appspot.com/FB8815719)
 
+### Export Fails with "Cancelled" Error (Issue #37)
+
+**Problem:** Some videos fail to compress with a cancelled/canceled error message, especially when selecting videos directly from the photo library.
+
+**Cause:** File access permissions or buffering issues when reading from certain storage locations.
+
+**Solution:** Copy the video to your app's writable directory before exporting:
+
+```swift
+func exportVideoFromLibrary(asset: PHAsset) async throws -> URL {
+    // 1. Export to temporary file first
+    let tempURL = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString)
+        .appendingPathExtension("mov")
+
+    // 2. Request video resource from Photos library
+    let options = PHVideoRequestOptions()
+    options.version = .current
+    options.deliveryMode = .highQualityFormat
+
+    try await withCheckedThrowingContinuation { continuation in
+        PHImageManager.default().requestExportSession(
+            forVideo: asset,
+            options: options,
+            exportPreset: AVAssetExportPresetPassthrough
+        ) { exportSession, _ in
+            guard let session = exportSession else {
+                continuation.resume(throwing: NSError(domain: "Export", code: -1))
+                return
+            }
+
+            session.outputURL = tempURL
+            session.outputFileType = .mov
+            session.exportAsynchronously {
+                if session.status == .completed {
+                    continuation.resume(returning: ())
+                } else {
+                    continuation.resume(throwing: session.error ?? NSError(domain: "Export", code: -1))
+                }
+            }
+        }
+    }
+
+    // 3. Now export with NextLevelSessionExporter
+    let avAsset = AVAsset(url: tempURL)
+    let exporter = NextLevelSessionExporter(withAsset: avAsset)
+
+    let outputURL = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString)
+        .appendingPathExtension("mp4")
+
+    exporter.outputURL = outputURL
+    exporter.videoOutputConfiguration = [/* your config */]
+    exporter.audioOutputConfiguration = [/* your config */]
+
+    let result = try await exporter.export()
+
+    // 4. Clean up temp file
+    try? FileManager.default.removeItem(at: tempURL)
+
+    return result
+}
+```
+
+**Alternative (simpler):** Use `AVAsset(url:)` with a file URL rather than `PHAsset` directly:
+
+```swift
+// Copy to caches directory first
+let cacheURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+    .appendingPathComponent("video.mov")
+
+// ... copy file to cacheURL ...
+
+let asset = AVAsset(url: cacheURL)
+let exporter = NextLevelSessionExporter(withAsset: asset)
+```
+
 ### Export Fails with "Reading Failure"
 
 **Problem:** Export fails when reading the source asset.
@@ -425,6 +522,7 @@ func exportWithRetry(maxAttempts: Int = 3) async throws -> URL {
 - Verify the source asset is not corrupted
 - Check that the asset is a supported format (MP4, MOV, M4V, etc.)
 - Ensure the asset is accessible and not protected by DRM
+- If reading from Photos library, see "Cancelled Error" above
 
 ### Memory Issues on Long Videos
 
