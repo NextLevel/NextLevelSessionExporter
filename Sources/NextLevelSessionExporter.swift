@@ -167,6 +167,9 @@ open class NextLevelSessionExporter: NSObject, @unchecked Sendable {
     fileprivate var _duration: TimeInterval = 0
     fileprivate var _lastSamplePresentationTime: CMTime = .invalid
 
+    fileprivate var _videoSetupFailed: Bool = false
+    fileprivate var _videoSetupError: Error?
+
     // MARK: - object lifecycle
 
     /// Initializes a session with an asset to export.
@@ -253,6 +256,8 @@ extension NextLevelSessionExporter {
         }
 
         self._progress = 0
+        self._videoSetupFailed = false
+        self._videoSetupError = nil
 
         do {
             self._reader = try AVAssetReader(asset: asset)
@@ -306,6 +311,17 @@ extension NextLevelSessionExporter {
         self.setupAudioOutput(withAsset: asset)
         self.setupAudioInput()
 
+        // Validate that video setup succeeded if video tracks exist (Issue #38)
+        let videoTracks = asset.tracks(withMediaType: AVMediaType.video)
+        if videoTracks.count > 0 && self._videoSetupFailed {
+            print("NextLevelSessionExporter, video tracks exist but video setup failed - aborting export")
+            DispatchQueue.main.async {
+                let error = self._videoSetupError ?? NextLevelSessionExporterError.setupFailure("Video output could not be configured")
+                self._completionHandler?(.failure(error))
+            }
+            return
+        }
+
         // export
 
         self._writer?.startWriting()
@@ -314,7 +330,7 @@ extension NextLevelSessionExporter {
 
         let dispatchGroup = DispatchGroup()
 
-        let videoTracks = asset.tracks(withMediaType: AVMediaType.video)
+        // Reuse videoTracks from validation above (Issue #38)
         if let videoInput = self._videoInput,
            let videoOutput = self._videoOutput,
            videoTracks.count > 0 {
@@ -395,7 +411,10 @@ extension NextLevelSessionExporter {
             self._videoInput = AVAssetWriterInput(mediaType: AVMediaType.video, outputSettings: self.videoOutputConfiguration)
             self._videoInput?.expectsMediaDataInRealTime = self.expectsMediaDataInRealTime
         } else {
-            print("Unsupported output configuration")
+            // Mark video setup as failed - this will cause the export to fail with a clear error
+            self._videoSetupFailed = true
+            self._videoSetupError = NextLevelSessionExporterError.invalidConfiguration("Video output configuration is not compatible with this asset. The writer cannot apply the specified video settings.")
+            print("NextLevelSessionExporter, video output configuration is not supported by the writer")
             return
         }
 
@@ -740,6 +759,9 @@ extension NextLevelSessionExporter {
         self._progressHandler = nil
         self._renderHandler = nil
         self._completionHandler = nil
+
+        self._videoSetupFailed = false
+        self._videoSetupError = nil
     }
 
 }
