@@ -11,6 +11,7 @@ The library provides customizable audio and video encoding options unlike `AVAss
 
 - **🚀 Modern Async/Await API** - Native Swift concurrency support with `async/await` and `AsyncSequence`
 - **🌈 HDR Video Support** - Automatic detection and preservation of HLG and HDR10 content with 10-bit HEVC
+- **📐 Scaling Mode Fixes** - AVVideoScalingModeKey now works correctly for aspect-fill and resize (#33)
 - **⚡ Better Performance** - Proper memory management with autoreleasepool in encoding loop
 - **🎯 QoS Configuration** - Control export priority to prevent thread priority inversion (PR #44)
 - **🔒 Swift 6 Strict Concurrency** - Full `Sendable` conformance and thread-safety
@@ -239,6 +240,47 @@ exporter.videoOutputConfiguration = [
         AVVideoMaxKeyFrameIntervalKey: 30,     // Keyframe every 30 frames
         AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel
     ]
+]
+```
+
+#### Video Scaling Modes
+
+Control how videos are scaled to target dimensions using `AVVideoScalingModeKey` ([Fixed in 1.0.1 - Issue #33](https://github.com/NextLevel/NextLevelSessionExporter/issues/33)):
+
+```swift
+exporter.videoOutputConfiguration = [
+    AVVideoCodecKey: AVVideoCodecType.h264,
+    AVVideoWidthKey: 720,
+    AVVideoHeightKey: 1280,
+    AVVideoScalingModeKey: AVVideoScalingModeResizeAspectFill  // Choose your scaling mode
+]
+```
+
+**Available Scaling Modes:**
+
+- **`AVVideoScalingModeResizeAspectFill`** (Recommended)
+  - Scales video to fill the target dimensions while maintaining aspect ratio
+  - May crop content to fill the entire frame
+  - Ideal for converting landscape → portrait or vice versa
+
+- **`AVVideoScalingModeResize`**
+  - Stretches video to exact target dimensions
+  - Does not maintain aspect ratio
+  - Use when you want non-uniform scaling
+
+- **`AVVideoScalingModeResizeAspect`** (Default if not specified)
+  - Fits entire video within target dimensions while maintaining aspect ratio
+  - May add letterboxing/pillarboxing (black bars)
+  - Legacy behavior for backward compatibility
+
+**Example: Landscape → Portrait Conversion**
+```swift
+// Convert 1920x1080 landscape video to 720x1280 portrait
+exporter.videoOutputConfiguration = [
+    AVVideoCodecKey: AVVideoCodecType.h264,
+    AVVideoWidthKey: 720,
+    AVVideoHeightKey: 1280,
+    AVVideoScalingModeKey: AVVideoScalingModeResizeAspectFill  // Crops sides, fills frame
 ]
 ```
 
@@ -599,11 +641,19 @@ let exporter = NextLevelSessionExporter(withAsset: asset)
 - Avoid frame-by-frame processing if not needed
 - Test on a physical device (simulator performance varies)
 
-### Video Orientation is Wrong
+### Video Orientation or Scaling Issues
 
 The library automatically handles video orientation and transforms. If you're experiencing issues:
+
+**Orientation Problems:**
 - Let the library create the video composition automatically (don't set `videoComposition`)
 - Ensure your video output configuration includes proper width/height
+
+**Scaling Not Working (Fixed in 1.0.1):**
+- If video doesn't fill the target dimensions as expected, use `AVVideoScalingModeKey`
+- See the [Video Scaling Modes](#video-scaling-modes) section for details
+- Common issue: landscape → portrait conversion with black bars
+  - Solution: Use `AVVideoScalingModeResizeAspectFill`
 
 ### Audio Track Missing
 

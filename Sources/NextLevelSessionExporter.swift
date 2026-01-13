@@ -787,23 +787,59 @@ extension NextLevelSessionExporter {
                     naturalSize.width = naturalSize.height
                     naturalSize.height = tempWidth
                 }
-                videoComposition.renderSize = naturalSize
 
-                // center the video
+                // Check if user specified a scaling mode (Issue #33)
+                let scalingMode = videoConfiguration[AVVideoScalingModeKey] as? String
 
-                var ratio: CGFloat = 0
-                let xRatio: CGFloat = targetSize.width / naturalSize.width
-                let yRatio: CGFloat = targetSize.height / naturalSize.height
-                ratio = min(xRatio, yRatio)
+                if scalingMode == AVVideoScalingModeResizeAspectFill || scalingMode == AVVideoScalingModeResize {
+                    // User wants aspect-fill or resize - respect their choice
+                    videoComposition.renderSize = targetSize
 
-                let postWidth = naturalSize.width * ratio
-                let postHeight = naturalSize.height * ratio
-                let transX = (targetSize.width - postWidth) * 0.5
-                let transY = (targetSize.height - postHeight) * 0.5
+                    // Calculate scale and translation based on scaling mode
+                    let xRatio: CGFloat = targetSize.width / naturalSize.width
+                    let yRatio: CGFloat = targetSize.height / naturalSize.height
 
-                var matrix = CGAffineTransform(translationX: (transX / xRatio), y: (transY / yRatio))
-                matrix = matrix.scaledBy(x: (ratio / xRatio), y: (ratio / yRatio))
-                transform = transform.concatenating(matrix)
+                    let ratio: CGFloat
+                    if scalingMode == AVVideoScalingModeResizeAspectFill {
+                        // Aspect fill: scale to fill entire target (may crop)
+                        ratio = max(xRatio, yRatio)
+                    } else {
+                        // Resize: stretch to fill target exactly
+                        ratio = 1.0
+                    }
+
+                    let postWidth = naturalSize.width * ratio
+                    let postHeight = naturalSize.height * ratio
+                    let transX = (targetSize.width - postWidth) * 0.5
+                    let transY = (targetSize.height - postHeight) * 0.5
+
+                    var matrix = CGAffineTransform(translationX: (transX / xRatio), y: (transY / yRatio))
+                    if scalingMode == AVVideoScalingModeResize {
+                        // Stretch to exact dimensions
+                        matrix = matrix.scaledBy(x: xRatio, y: yRatio)
+                    } else {
+                        // Scale uniformly for aspect fill
+                        matrix = matrix.scaledBy(x: (ratio / xRatio), y: (ratio / yRatio))
+                    }
+                    transform = transform.concatenating(matrix)
+                } else {
+                    // No scaling mode specified or aspect-fit - use legacy centering logic
+                    videoComposition.renderSize = naturalSize
+
+                    var ratio: CGFloat = 0
+                    let xRatio: CGFloat = targetSize.width / naturalSize.width
+                    let yRatio: CGFloat = targetSize.height / naturalSize.height
+                    ratio = min(xRatio, yRatio)
+
+                    let postWidth = naturalSize.width * ratio
+                    let postHeight = naturalSize.height * ratio
+                    let transX = (targetSize.width - postWidth) * 0.5
+                    let transY = (targetSize.height - postHeight) * 0.5
+
+                    var matrix = CGAffineTransform(translationX: (transX / xRatio), y: (transY / yRatio))
+                    matrix = matrix.scaledBy(x: (ratio / xRatio), y: (ratio / yRatio))
+                    transform = transform.concatenating(matrix)
+                }
 
                 // make the composition
 
