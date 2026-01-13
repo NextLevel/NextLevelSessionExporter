@@ -3,7 +3,7 @@
 
 `NextLevelSessionExporter` is an export and transcode media library for iOS written in [Swift](https://developer.apple.com/swift/).
 
-[![Pod Version](https://img.shields.io/cocoapods/v/NextLevelSessionExporter.svg?style=flat)](http://cocoadocs.org/docsets/NextLevelSessionExporter/) [![Swift Version](https://img.shields.io/badge/language-swift%206.0-brightgreen.svg)](https://developer.apple.com/swift) [![GitHub license](https://img.shields.io/badge/license-MIT-lightgrey.svg)](https://github.com/NextLevel/NextLevelSessionExporter/blob/master/LICENSE)
+[![Swift Version](https://img.shields.io/badge/language-swift%206.0-brightgreen.svg)](https://developer.apple.com/swift) [![Platform](https://img.shields.io/badge/platform-iOS%2015.0%2B-blue.svg)](https://developer.apple.com/ios/) [![SPM Compatible](https://img.shields.io/badge/Swift%20Package%20Manager-compatible-brightgreen.svg)](https://swift.org/package-manager/) [![GitHub license](https://img.shields.io/badge/license-MIT-lightgrey.svg)](https://github.com/NextLevel/NextLevelSessionExporter/blob/master/LICENSE)
 
 The library provides customizable audio and video encoding options unlike `AVAssetExportSession` and without having to learn the intricacies of AVFoundation. It was a port of [SDAVAssetExportSession](https://github.com/rs/SDAVAssetExportSession) with inspiration from [SCAssetExportSession](https://github.com/rFlex/SCRecorder/blob/master/Library/Sources/SCAssetExportSession.h) – which are great obj-c alternatives.
 
@@ -11,6 +11,7 @@ The library provides customizable audio and video encoding options unlike `AVAss
 
 - **🚀 Modern Async/Await API** - Native Swift concurrency support with `async/await` and `AsyncSequence`
 - **⚡ Better Performance** - Proper memory management with autoreleasepool in encoding loop
+- **🎯 QoS Configuration** - Control export priority to prevent thread priority inversion (PR #44)
 - **🔒 Swift 6 Strict Concurrency** - Full `Sendable` conformance and thread-safety
 - **📝 Enhanced Error Messages** - Contextual error descriptions with recovery suggestions
 - **♻️ Task Cancellation** - Proper cancellation support for modern Swift concurrency
@@ -305,6 +306,28 @@ exporter.metadata = metadata
 ```
 
 ## Performance & Best Practices
+
+### Quality of Service (QoS) Configuration
+
+Control the priority of export operations to prevent thread priority inversion and optimize performance:
+
+```swift
+// High priority for user-initiated exports (default)
+let exporter = NextLevelSessionExporter(withAsset: asset, qos: .userInitiated)
+
+// Medium priority for background processing
+let exporter = NextLevelSessionExporter(withAsset: asset, qos: .utility)
+
+// Low priority for deferrable work
+let exporter = NextLevelSessionExporter(withAsset: asset, qos: .background)
+```
+
+**When to use different QoS levels:**
+- **`.userInitiated`** (default) - User tapped export, expects quick results
+- **`.utility`** - Background export that can take longer
+- **`.background`** - Batch processing, lowest priority
+
+This resolves thread priority inversion warnings (Issues [#48](https://github.com/NextLevel/NextLevelSessionExporter/issues/48), [#41](https://github.com/NextLevel/NextLevelSessionExporter/issues/41)) and is especially important when calling from async/await contexts.
 
 ### Memory Management
 

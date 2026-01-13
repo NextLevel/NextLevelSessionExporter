@@ -145,6 +145,8 @@ open class NextLevelSessionExporter: NSObject, @unchecked Sendable {
 
     fileprivate let InputQueueLabel = "NextLevelSessionExporterInputQueue"
 
+    fileprivate var _qos: DispatchQoS.QoSClass
+
     fileprivate var _writer: AVAssetWriter?
     fileprivate var _reader: AVAssetReader?
     fileprivate var _pixelBufferAdaptor: AVAssetWriterInputPixelBufferAdaptor?
@@ -169,16 +171,34 @@ open class NextLevelSessionExporter: NSObject, @unchecked Sendable {
 
     /// Initializes a session with an asset to export.
     ///
-    /// - Parameter asset: The asset to export.
-    public convenience init(withAsset asset: AVAsset) {
-        self.init()
+    /// - Parameters:
+    ///   - asset: The asset to export.
+    ///   - qos: Quality of service for the export operation. Defaults to `.userInitiated`.
+    public convenience init(withAsset asset: AVAsset, qos: DispatchQoS.QoSClass = .userInitiated) {
+        self.init(qos: qos)
         self.asset = asset
     }
 
-    public override init() {
-        self._inputQueue = DispatchQueue(label: InputQueueLabel, autoreleaseFrequency: .workItem, target: DispatchQueue.global())
+    /// Initializes a session with specified quality of service.
+    ///
+    /// - Parameter qos: Quality of service for the export operation. Defaults to `.userInitiated`.
+    ///
+    /// Use this to control the priority of the export operation:
+    /// - `.userInitiated`: Good for exports triggered by user actions (recommended)
+    /// - `.utility`: Good for background exports that aren't time-critical
+    /// - `.background`: Lowest priority for deferrable work
+    public init(qos: DispatchQoS.QoSClass = .userInitiated) {
+        self._qos = qos
+        self._inputQueue = DispatchQueue(label: InputQueueLabel, autoreleaseFrequency: .workItem, target: DispatchQueue.global(qos: qos))
         self.timeRange = CMTimeRange(start: CMTime.zero, end: CMTime.positiveInfinity)
         super.init()
+    }
+
+    /// Legacy initializer for backward compatibility.
+    ///
+    /// This initializer uses `.userInitiated` QoS by default, which is appropriate for most use cases.
+    public override convenience init() {
+        self.init(qos: .userInitiated)
     }
 
     deinit {
@@ -316,7 +336,7 @@ extension NextLevelSessionExporter {
             })
         }
 
-        dispatchGroup.notify(queue: .global()) {
+        dispatchGroup.notify(queue: .global(qos: self._qos)) {
             DispatchQueue.main.async {
                 self.finish()
             }
@@ -472,15 +492,25 @@ extension NextLevelSessionExporter {
                         let pixelBufferPool = pixelBufferAdaptor.pixelBufferPool,
                         let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
 
-                        var toRenderBuffer: CVPixelBuffer? = nil
-                        let result = CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pixelBufferPool, &toRenderBuffer)
-                        if result == kCVReturnSuccess {
-                            if let toBuffer = toRenderBuffer {
-                                self._renderHandler?(pixelBuffer, self._lastSamplePresentationTime, toBuffer)
-                                if pixelBufferAdaptor.append(toBuffer, withPresentationTime:self._lastSamplePresentationTime) == false {
-                                    error = true
+                        // If no render handler, directly append the original pixel buffer
+                        // This prevents black frames caused by using uninitialized pool buffers (PR #39)
+                        if self._renderHandler == nil {
+                            if pixelBufferAdaptor.append(pixelBuffer, withPresentationTime: self._lastSamplePresentationTime) == false {
+                                error = true
+                            }
+                            handled = true
+                        } else {
+                            // Render handler exists, create pool buffer for processing
+                            var toRenderBuffer: CVPixelBuffer? = nil
+                            let result = CVPixelBufferPoolCreatePixelBuffer(kCFAllocatorDefault, pixelBufferPool, &toRenderBuffer)
+                            if result == kCVReturnSuccess {
+                                if let toBuffer = toRenderBuffer {
+                                    self._renderHandler?(pixelBuffer, self._lastSamplePresentationTime, toBuffer)
+                                    if pixelBufferAdaptor.append(toBuffer, withPresentationTime: self._lastSamplePresentationTime) == false {
+                                        error = true
+                                    }
+                                    handled = true
                                 }
-                                handled = true
                             }
                         }
                     }
