@@ -23,8 +23,24 @@
 
 import Foundation
 import AVFoundation
+import VideoToolbox
 
 // MARK: - types
+
+/// HDR transfer function for video export.
+public enum HDRTransferFunction: String, Sendable {
+    case hlg = "ITU_R_2100_HLG"
+    case hdr10 = "SMPTE_ST_2084_PQ"
+
+    var avTransferFunction: String {
+        switch self {
+        case .hlg:
+            return AVVideoTransferFunction_ITU_R_2100_HLG
+        case .hdr10:
+            return AVVideoTransferFunction_SMPTE_ST_2084_PQ
+        }
+    }
+}
 
 /// Session export errors.
 public enum NextLevelSessionExporterError: LocalizedError, Sendable {
@@ -111,6 +127,12 @@ open class NextLevelSessionExporter: NSObject, @unchecked Sendable {
     /// Audio output configuration dictionary, using keys defined in `<AVFoundation/AVAudioSettings.h>`
     public var audioOutputConfiguration: [String : Any]?
 
+    /// Automatically detect and preserve HDR content from source video.
+    /// When enabled, the exporter will detect HDR color space and transfer function
+    /// from the source asset and apply appropriate 10-bit HEVC encoding settings.
+    /// Set to `false` to force SDR output. Default is `true`.
+    public var preserveHDR: Bool = true
+
     /// Export session status state.
     public var status: AVAssetExportSession.Status {
         get {
@@ -169,6 +191,11 @@ open class NextLevelSessionExporter: NSObject, @unchecked Sendable {
 
     fileprivate var _videoSetupFailed: Bool = false
     fileprivate var _videoSetupError: Error?
+
+    fileprivate var _detectedHDR: Bool = false
+    fileprivate var _hdrTransferFunction: String?
+    fileprivate var _hdrColorPrimaries: String?
+    fileprivate var _hdrYCbCrMatrix: String?
 
     // MARK: - object lifecycle
 
@@ -258,6 +285,10 @@ extension NextLevelSessionExporter {
         self._progress = 0
         self._videoSetupFailed = false
         self._videoSetupError = nil
+        self._detectedHDR = false
+        self._hdrTransferFunction = nil
+        self._hdrColorPrimaries = nil
+        self._hdrYCbCrMatrix = nil
 
         do {
             self._reader = try AVAssetReader(asset: asset)
@@ -379,6 +410,123 @@ extension NextLevelSessionExporter {
 
 }
 
+// MARK: - HDR support
+
+extension NextLevelSessionExporter {
+
+    /// Detects HDR color properties from the source video track.
+    ///
+    /// - Parameter videoTrack: The video track to inspect for HDR properties
+    /// - Returns: True if HDR content is detected
+    private func detectHDR(from videoTrack: AVAssetTrack) -> Bool {
+        guard self.preserveHDR else {
+            return false
+        }
+
+        guard let formatDescriptions = videoTrack.formatDescriptions as? [CMFormatDescription],
+              let formatDescription = formatDescriptions.first else {
+            return false
+        }
+
+        guard let extensions = CMFormatDescriptionGetExtensions(formatDescription) as? [String: Any] else {
+            return false
+        }
+
+        // Check for HDR transfer function (HLG or PQ)
+        if let transferFunction = extensions[kCVImageBufferTransferFunctionKey as String] as? String {
+            if transferFunction == kCVImageBufferTransferFunction_ITU_R_2100_HLG as String ||
+               transferFunction == kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ as String {
+                self._hdrTransferFunction = transferFunction
+            }
+        }
+
+        // Check for wide color gamut primaries
+        if let colorPrimaries = extensions[kCVImageBufferColorPrimariesKey as String] as? String {
+            if colorPrimaries == kCVImageBufferColorPrimaries_ITU_R_2020 as String {
+                self._hdrColorPrimaries = colorPrimaries
+            }
+        }
+
+        // Check for YCbCr matrix
+        if let yCbCrMatrix = extensions[kCVImageBufferYCbCrMatrixKey as String] as? String {
+            if yCbCrMatrix == kCVImageBufferYCbCrMatrix_ITU_R_2020 as String {
+                self._hdrYCbCrMatrix = yCbCrMatrix
+            }
+        }
+
+        // HDR is detected if we have transfer function and color primaries
+        let isHDR = self._hdrTransferFunction != nil && self._hdrColorPrimaries != nil
+        self._detectedHDR = isHDR
+
+        return isHDR
+    }
+
+    /// Configures the exporter for explicit HDR output with the specified transfer function.
+    ///
+    /// Call this method to force HDR encoding even if the source is SDR, or to override
+    /// the detected HDR transfer function.
+    ///
+    /// - Parameter transferFunction: The HDR transfer function to use (.hlg or .hdr10)
+    ///
+    /// ## Example
+    /// ```swift
+    /// let exporter = NextLevelSessionExporter(withAsset: asset)
+    /// exporter.configureForHDR(transferFunction: .hlg)
+    /// ```
+    ///
+    /// - Note: This will be applied when you call `export()`. You must also ensure your
+    ///   `videoOutputConfiguration` uses HEVC codec and appropriate dimensions.
+    public func configureForHDR(transferFunction: HDRTransferFunction = .hlg) {
+        self._detectedHDR = true
+        self._hdrTransferFunction = transferFunction.avTransferFunction
+        self._hdrColorPrimaries = kCVImageBufferColorPrimaries_ITU_R_2020 as String
+        self._hdrYCbCrMatrix = kCVImageBufferYCbCrMatrix_ITU_R_2020 as String
+    }
+
+    /// Applies HDR color properties to the video output configuration.
+    ///
+    /// - Parameter videoConfig: The video output configuration dictionary to modify
+    /// - Returns: Modified configuration with HDR properties added
+    private func applyHDRProperties(to videoConfig: [String: Any]) -> [String: Any] {
+        guard self._detectedHDR,
+              let transferFunction = self._hdrTransferFunction,
+              let colorPrimaries = self._hdrColorPrimaries else {
+            return videoConfig
+        }
+
+        var config = videoConfig
+
+        // Ensure HEVC codec for HDR
+        if config[AVVideoCodecKey] == nil {
+            config[AVVideoCodecKey] = AVVideoCodecType.hevc
+        }
+
+        // Add color properties for HDR
+        var colorProperties: [String: Any] = [:]
+        colorProperties[AVVideoTransferFunctionKey] = transferFunction
+        colorProperties[AVVideoColorPrimariesKey] = colorPrimaries
+
+        if let yCbCrMatrix = self._hdrYCbCrMatrix {
+            colorProperties[AVVideoYCbCrMatrixKey] = yCbCrMatrix
+        }
+
+        config[AVVideoColorPropertiesKey] = colorProperties
+
+        // Add compression properties for 10-bit HEVC
+        var compressionProperties = config[AVVideoCompressionPropertiesKey] as? [String: Any] ?? [:]
+        compressionProperties[AVVideoProfileLevelKey] = kVTProfileLevel_HEVC_Main10_AutoLevel
+
+        // Add HDR metadata insertion mode (iOS 14+ / macOS 11+)
+        if #available(iOS 14.0, macOS 11.0, *) {
+            compressionProperties[kVTCompressionPropertyKey_HDRMetadataInsertionMode as String] = kVTHDRMetadataInsertionMode_Auto
+        }
+
+        config[AVVideoCompressionPropertiesKey] = compressionProperties
+
+        return config
+    }
+}
+
 // MARK: - setup funcs
 
 extension NextLevelSessionExporter {
@@ -390,7 +538,26 @@ extension NextLevelSessionExporter {
             return
         }
 
-        self._videoOutput = AVAssetReaderVideoCompositionOutput(videoTracks: videoTracks, videoSettings: self.videoInputConfiguration)
+        // Detect HDR from the first video track
+        if let firstVideoTrack = videoTracks.first {
+            let isHDR = self.detectHDR(from: firstVideoTrack)
+            if isHDR {
+                print("NextLevelSessionExporter, HDR content detected - will preserve HDR properties")
+            }
+        }
+
+        // Configure video input settings for HDR if detected
+        var videoInputSettings = self.videoInputConfiguration
+        if self._detectedHDR {
+            // For HDR, use 10-bit pixel format
+            if videoInputSettings == nil {
+                videoInputSettings = [:]
+            }
+            // Use 420YpCbCr10BiPlanarVideoRange for 10-bit HDR processing
+            videoInputSettings?[kCVPixelBufferPixelFormatTypeKey as String] = NSNumber(integerLiteral: Int(kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange))
+        }
+
+        self._videoOutput = AVAssetReaderVideoCompositionOutput(videoTracks: videoTracks, videoSettings: videoInputSettings)
         self._videoOutput?.alwaysCopiesSampleData = false
 
         if let videoComposition = self.videoComposition {
@@ -407,8 +574,14 @@ extension NextLevelSessionExporter {
         }
 
         // video input
-        if self._writer?.canApply(outputSettings: self.videoOutputConfiguration, forMediaType: AVMediaType.video) == true {
-            self._videoInput = AVAssetWriterInput(mediaType: AVMediaType.video, outputSettings: self.videoOutputConfiguration)
+        // Apply HDR properties to video output configuration if HDR was detected
+        var finalVideoOutputConfiguration = self.videoOutputConfiguration
+        if self._detectedHDR, let videoConfig = finalVideoOutputConfiguration {
+            finalVideoOutputConfiguration = self.applyHDRProperties(to: videoConfig)
+        }
+
+        if self._writer?.canApply(outputSettings: finalVideoOutputConfiguration, forMediaType: AVMediaType.video) == true {
+            self._videoInput = AVAssetWriterInput(mediaType: AVMediaType.video, outputSettings: finalVideoOutputConfiguration)
             self._videoInput?.expectsMediaDataInRealTime = self.expectsMediaDataInRealTime
         } else {
             // Mark video setup as failed - this will cause the export to fail with a clear error
@@ -427,7 +600,11 @@ extension NextLevelSessionExporter {
             // setup pixelbuffer adaptor
 
             var pixelBufferAttrib: [String : Any] = [:]
-            pixelBufferAttrib[kCVPixelBufferPixelFormatTypeKey as String] = NSNumber(integerLiteral: Int(kCVPixelFormatType_32RGBA))
+
+            // Use 10-bit pixel format for HDR, otherwise 8-bit RGBA for SDR
+            let pixelFormat = self._detectedHDR ? kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange : kCVPixelFormatType_32RGBA
+            pixelBufferAttrib[kCVPixelBufferPixelFormatTypeKey as String] = NSNumber(integerLiteral: Int(pixelFormat))
+
             if let videoComposition = self._videoOutput?.videoComposition {
                 pixelBufferAttrib[kCVPixelBufferWidthKey as String] = NSNumber(integerLiteral: Int(videoComposition.renderSize.width))
                 pixelBufferAttrib[kCVPixelBufferHeightKey as String] = NSNumber(integerLiteral: Int(videoComposition.renderSize.height))
@@ -762,6 +939,11 @@ extension NextLevelSessionExporter {
 
         self._videoSetupFailed = false
         self._videoSetupError = nil
+
+        self._detectedHDR = false
+        self._hdrTransferFunction = nil
+        self._hdrColorPrimaries = nil
+        self._hdrYCbCrMatrix = nil
     }
 
 }

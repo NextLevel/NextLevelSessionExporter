@@ -10,11 +10,13 @@ The library provides customizable audio and video encoding options unlike `AVAss
 ### ✨ What's New in Swift 6
 
 - **🚀 Modern Async/Await API** - Native Swift concurrency support with `async/await` and `AsyncSequence`
+- **🌈 HDR Video Support** - Automatic detection and preservation of HLG and HDR10 content with 10-bit HEVC
 - **⚡ Better Performance** - Proper memory management with autoreleasepool in encoding loop
 - **🎯 QoS Configuration** - Control export priority to prevent thread priority inversion (PR #44)
 - **🔒 Swift 6 Strict Concurrency** - Full `Sendable` conformance and thread-safety
 - **📝 Enhanced Error Messages** - Contextual error descriptions with recovery suggestions
 - **♻️ Task Cancellation** - Proper cancellation support for modern Swift concurrency
+- **🛡️ Better Error Handling** - Fixed silent failures causing audio-only exports (#38)
 - **🔙 Backwards Compatible** - Legacy completion handler API still works for iOS 13+
 
 ### Requirements
@@ -282,6 +284,67 @@ exporter.export { renderFrame, presentationTime, resultBuffer in
     print("Progress: \(progress)")
 }
 ```
+
+### HDR Video Support
+
+NextLevelSessionExporter automatically detects and preserves HDR content (HLG and HDR10) from source videos:
+
+```swift
+// Automatic HDR preservation (default behavior)
+let exporter = NextLevelSessionExporter(withAsset: hdrAsset)
+exporter.outputURL = outputURL
+exporter.videoOutputConfiguration = [
+    AVVideoWidthKey: 1920,
+    AVVideoHeightKey: 1080
+]
+// HDR properties automatically detected and preserved ✨
+
+let result = try await exporter.export()
+// Output maintains HDR color space, transfer function, and 10-bit encoding
+```
+
+**Features:**
+- **Automatic Detection**: Detects HLG (Hybrid Log-Gamma) and HDR10 (PQ) transfer functions
+- **10-bit HEVC**: Automatically configures Main10 profile for 10-bit encoding
+- **Color Properties**: Preserves ITU-R BT.2020 color primaries and YCbCr matrix
+- **HDR Metadata**: Automatically inserts and preserves HDR metadata (iOS 14+)
+
+#### Force SDR Output
+
+To convert HDR to SDR, disable HDR preservation:
+
+```swift
+exporter.preserveHDR = false
+// Output will be 8-bit SDR
+```
+
+#### Explicit HDR Configuration
+
+Force HDR encoding even for SDR source, or override detected transfer function:
+
+```swift
+// Configure for HLG HDR
+exporter.configureForHDR(transferFunction: .hlg)
+
+// Or configure for HDR10 (PQ)
+exporter.configureForHDR(transferFunction: .hdr10)
+
+// Note: HEVC codec and appropriate dimensions required
+exporter.videoOutputConfiguration = [
+    AVVideoCodecKey: AVVideoCodecType.hevc,
+    AVVideoWidthKey: 1920,
+    AVVideoHeightKey: 1080
+]
+```
+
+**Requirements:**
+- iOS 15.0+ or macOS 12.0+
+- HEVC (H.265) codec required for HDR
+- Device must support 10-bit HEVC encoding
+
+**Supported HDR Formats:**
+- HLG (Hybrid Log-Gamma) - Broadcast standard, better for wide compatibility
+- HDR10 (PQ/SMPTE ST 2084) - Consumer HDR standard with static metadata
 
 ### Time Range Trimming
 
