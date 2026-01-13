@@ -554,7 +554,7 @@ extension NextLevelSessionExporter {
                 videoInputSettings = [:]
             }
             // Use 420YpCbCr10BiPlanarVideoRange for 10-bit HDR processing
-            videoInputSettings?[kCVPixelBufferPixelFormatTypeKey as String] = NSNumber(integerLiteral: Int(kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange))
+            videoInputSettings?[kCVPixelBufferPixelFormatTypeKey as String] = Int(kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange) as NSNumber
         }
 
         self._videoOutput = AVAssetReaderVideoCompositionOutput(videoTracks: videoTracks, videoSettings: videoInputSettings)
@@ -603,14 +603,14 @@ extension NextLevelSessionExporter {
 
             // Use 10-bit pixel format for HDR, otherwise 8-bit RGBA for SDR
             let pixelFormat = self._detectedHDR ? kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange : kCVPixelFormatType_32RGBA
-            pixelBufferAttrib[kCVPixelBufferPixelFormatTypeKey as String] = NSNumber(integerLiteral: Int(pixelFormat))
+            pixelBufferAttrib[kCVPixelBufferPixelFormatTypeKey as String] = Int(pixelFormat) as NSNumber
 
             if let videoComposition = self._videoOutput?.videoComposition {
-                pixelBufferAttrib[kCVPixelBufferWidthKey as String] = NSNumber(integerLiteral: Int(videoComposition.renderSize.width))
-                pixelBufferAttrib[kCVPixelBufferHeightKey as String] = NSNumber(integerLiteral: Int(videoComposition.renderSize.height))
+                pixelBufferAttrib[kCVPixelBufferWidthKey as String] = Int(videoComposition.renderSize.width) as NSNumber
+                pixelBufferAttrib[kCVPixelBufferHeightKey as String] = Int(videoComposition.renderSize.height) as NSNumber
             }
-            pixelBufferAttrib["IOSurfaceOpenGLESTextureCompatibility"] = NSNumber(booleanLiteral:  true)
-            pixelBufferAttrib["IOSurfaceOpenGLESFBOCompatibility"] = NSNumber(booleanLiteral:  true)
+            pixelBufferAttrib["IOSurfaceOpenGLESTextureCompatibility"] = true as NSNumber
+            pixelBufferAttrib["IOSurfaceOpenGLESFBOCompatibility"] = true as NSNumber
 
             self._pixelBufferAdaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: videoInput, sourcePixelBufferAttributes: pixelBufferAttrib)
         }
@@ -627,7 +627,12 @@ extension NextLevelSessionExporter {
         var audioTracksToUse: [AVAssetTrack] = []
         // Remove APAC tracks (See Issue #49)
         for audioTrack in audioTracks {
-            let mediaSubtypes = audioTrack.formatDescriptions.filter { CMFormatDescriptionGetMediaType($0 as! CMFormatDescription) == kCMMediaType_Audio }.map { CMFormatDescriptionGetMediaSubType($0 as! CMFormatDescription) }
+            // Note: CoreFoundation types require force cast in Swift
+            let audioFormats = audioTrack.formatDescriptions
+                .filter { CMFormatDescriptionGetMediaType($0 as! CMFormatDescription) == kCMMediaType_Audio }
+
+            let mediaSubtypes = audioFormats.map { CMFormatDescriptionGetMediaSubType($0 as! CMFormatDescription) }
+
             for mediaSubtype in mediaSubtypes where mediaSubtype != kAudioFormatAPAC {
                 audioTracksToUse.append(audioTrack)
             }
@@ -772,8 +777,8 @@ extension NextLevelSessionExporter {
                 let rect = CGRect(x: 0, y: 0, width: naturalSize.width, height: naturalSize.height)
                 let transformedRect = rect.applying(transform)
                 // transformedRect should have origin at 0 if correct; otherwise add offset to correct it
-                transform.tx -= transformedRect.origin.x;
-                transform.ty -= transformedRect.origin.y;
+                transform.tx -= transformedRect.origin.x
+                transform.ty -= transformedRect.origin.y
 
 
                 let videoAngleInDegrees = atan2(transform.b, transform.a) * 180 / .pi
@@ -848,7 +853,7 @@ extension NextLevelSessionExporter {
                 self._completionHandler?(.failure(NextLevelSessionExporterError.cancelled))
                 return
             }
-            if FileManager.default.fileExists(atPath: outputURL.absoluteString) {
+            if FileManager.default.fileExists(atPath: outputURL.path) {
                 try? FileManager.default.removeItem(at: outputURL)
             }
             self._completionHandler?(.failure(NextLevelSessionExporterError.cancelled))
@@ -874,7 +879,7 @@ extension NextLevelSessionExporter {
                 self._completionHandler?(.failure(reader.error ?? NextLevelSessionExporterError.readingFailure(errorMessage)))
                 return
             }
-            if FileManager.default.fileExists(atPath: outputURL.absoluteString) {
+            if FileManager.default.fileExists(atPath: outputURL.path) {
                 try? FileManager.default.removeItem(at: outputURL)
             }
             let errorMessage = reader.error?.localizedDescription ?? "Asset reading failed"
@@ -892,7 +897,7 @@ extension NextLevelSessionExporter {
                 self._completionHandler?(.failure(writer.error ?? NextLevelSessionExporterError.writingFailure(errorMessage)))
                 return
             }
-            if FileManager.default.fileExists(atPath: outputURL.absoluteString) {
+            if FileManager.default.fileExists(atPath: outputURL.path) {
                 try? FileManager.default.removeItem(at: outputURL)
             }
             let errorMessage = writer.error?.localizedDescription ?? "Asset writing failed"
