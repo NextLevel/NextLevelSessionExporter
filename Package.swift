@@ -28,7 +28,7 @@ import PackageDescription
 let package = Package(
     name: "NextLevelSessionExporter",
     platforms: [
-      .iOS(.v15)
+      .iOS(.v16)
     ],
     products: [
       .library(name: "NextLevelSessionExporter", targets: ["SessionExporter"])
@@ -42,5 +42,5 @@ let package = Package(
           ]
       )
     ],
-    swiftLanguageVersions: [.version("6")]
+    swiftLanguageModes: [.version("6")]
 )
