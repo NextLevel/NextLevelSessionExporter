@@ -168,6 +168,27 @@ exporter.export(progressHandler: { (progress) in
 })
 ```
 
+### Rotating or Transforming Video
+
+Use `videoTransform` to apply a custom affine transform to video content without building a full `AVVideoComposition` manually. The exporter applies it as the base orientation transform, then handles centering and scaling on top.
+
+This is useful when the raw encoded pixels are in an unexpected orientation — for example, a video whose `naturalSize.height > naturalSize.width` that must be delivered in landscape:
+
+```swift
+// Rotate portrait-encoded video 90° clockwise to landscape
+let isPortrait = try await videoTrack.load(.naturalSize).height > videoTrack.load(.naturalSize).width
+if isPortrait {
+    exporter.videoTransform = CGAffineTransform(rotationAngle: -.pi / 2)
+    exporter.videoOutputConfiguration = [
+        AVVideoCodecKey: AVVideoCodecType.h264,
+        AVVideoWidthKey: 1920,   // landscape width
+        AVVideoHeightKey: 1080,  // landscape height
+    ]
+}
+```
+
+Any `CGAffineTransform` works — rotations, flips, or combinations. When `videoComposition` is set directly, `videoTransform` is ignored.
+
 ## Migration Guide
 
 ### Migrating from 0.x to 1.0 (Swift 6)
