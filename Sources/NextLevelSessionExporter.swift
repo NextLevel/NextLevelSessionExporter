@@ -127,6 +127,19 @@ open class NextLevelSessionExporter: NSObject, @unchecked Sendable {
     /// Audio output configuration dictionary, using keys defined in `<AVFoundation/AVAudioSettings.h>`
     public var audioOutputConfiguration: [String : Any]?
 
+    /// An optional transform applied to video content in the auto-generated video composition.
+    /// When set, this replaces the video track's `preferredTransform` as the base transform,
+    /// allowing custom rotations, flips, or other affine transforms without building a full
+    /// `AVVideoComposition` manually. The existing centering and scaling logic still applies on top.
+    ///
+    /// Has no effect when `videoComposition` is set directly.
+    ///
+    /// Example — export a portrait-encoded video (naturalSize.height > naturalSize.width) as landscape:
+    /// ```swift
+    /// exporter.videoTransform = CGAffineTransform(rotationAngle: -.pi / 2)
+    /// ```
+    public var videoTransform: CGAffineTransform?
+
     /// Automatically detect and preserve HDR content from source video.
     /// When enabled, the exporter will detect HDR color space and transfer function
     /// from the source asset and apply appropriate 10-bit HEVC encoding settings.
@@ -772,7 +785,7 @@ extension NextLevelSessionExporter {
                 let targetSize = CGSize(width: width, height: height)
                 var naturalSize = videoTrack.naturalSize
 
-                var transform = videoTrack.preferredTransform
+                var transform = self.videoTransform ?? videoTrack.preferredTransform
 
                 let rect = CGRect(x: 0, y: 0, width: naturalSize.width, height: naturalSize.height)
                 let transformedRect = rect.applying(transform)
