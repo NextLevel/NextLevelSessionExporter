@@ -140,6 +140,27 @@ open class NextLevelSessionExporter: NSObject, @unchecked Sendable {
     /// ```
     public var videoTransform: CGAffineTransform?
 
+    /// An optional display transform written into the output file's track header (`tkhd`).
+    ///
+    /// This is the **presentation** transform — it tells players how to rotate or flip the encoded
+    /// video for correct display, without affecting the encoded pixels themselves.
+    ///
+    /// Use this together with `videoTransform` when you rotate pixels in the composition and need
+    /// the output file to declare the inverse rotation so that standard players display the content
+    /// correctly. For example, to encode a portrait-encoded video as landscape and have players
+    /// present it back as portrait:
+    ///
+    /// ```swift
+    /// // Rotate pixels CW 90° in the composition (portrait → landscape encoded pixels)
+    /// exporter.videoTransform = CGAffineTransform(rotationAngle: -.pi / 2)
+    /// // Tell players to rotate the landscape-encoded output CCW 90° for portrait display
+    /// exporter.displayTransform = CGAffineTransform(rotationAngle: .pi / 2)
+    /// ```
+    ///
+    /// When `nil` (default), no display transform is written and players treat the encoded
+    /// dimensions as the natural display orientation.
+    public var displayTransform: CGAffineTransform?
+
     /// Automatically detect and preserve HDR content from source video.
     /// When enabled, the exporter will detect HDR color space and transfer function
     /// from the source asset and apply appropriate 10-bit HEVC encoding settings.
@@ -596,6 +617,9 @@ extension NextLevelSessionExporter {
         if self._writer?.canApply(outputSettings: finalVideoOutputConfiguration, forMediaType: AVMediaType.video) == true {
             self._videoInput = AVAssetWriterInput(mediaType: AVMediaType.video, outputSettings: finalVideoOutputConfiguration)
             self._videoInput?.expectsMediaDataInRealTime = self.expectsMediaDataInRealTime
+            if let displayTransform = self.displayTransform {
+                self._videoInput?.transform = displayTransform
+            }
         } else {
             // Mark video setup as failed - this will cause the export to fail with a clear error
             self._videoSetupFailed = true
