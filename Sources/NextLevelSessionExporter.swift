@@ -720,8 +720,16 @@ extension NextLevelSessionExporter {
                 var handled = false
                 var error = false
                 if self._videoOutput == output {
-                    // determine progress
-                    self._lastSamplePresentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer) - self.timeRange.start
+                    // The writer session starts at `timeRange.start`, so AVAssetWriter already
+                    // rebases source time to movie time. Sample buffers must therefore be appended
+                    // with their *original* presentation timestamp — subtracting `timeRange.start`
+                    // here as well applies the trim offset twice and silently discards every frame
+                    // before `timeRange.start` (they land at a negative movie time). This also
+                    // matches the audio path, which appends sample buffers unmodified.
+                    let samplePresentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+
+                    // determine progress (relative to the start of the exported range)
+                    self._lastSamplePresentationTime = samplePresentationTime - self.timeRange.start
                     let progress = self._duration == 0 ? 1 : Float(CMTimeGetSeconds(self._lastSamplePresentationTime) / self._duration)
                     self.updateProgress(progress: progress)
 
@@ -733,7 +741,7 @@ extension NextLevelSessionExporter {
                         // If no render handler, directly append the original pixel buffer
                         // This prevents black frames caused by using uninitialized pool buffers (PR #39)
                         if self._renderHandler == nil {
-                            if pixelBufferAdaptor.append(pixelBuffer, withPresentationTime: self._lastSamplePresentationTime) == false {
+                            if pixelBufferAdaptor.append(pixelBuffer, withPresentationTime: samplePresentationTime) == false {
                                 error = true
                             }
                             handled = true
@@ -744,7 +752,7 @@ extension NextLevelSessionExporter {
                             if result == kCVReturnSuccess {
                                 if let toBuffer = toRenderBuffer {
                                     self._renderHandler?(pixelBuffer, self._lastSamplePresentationTime, toBuffer)
-                                    if pixelBufferAdaptor.append(toBuffer, withPresentationTime: self._lastSamplePresentationTime) == false {
+                                    if pixelBufferAdaptor.append(toBuffer, withPresentationTime: samplePresentationTime) == false {
                                         error = true
                                     }
                                     handled = true
