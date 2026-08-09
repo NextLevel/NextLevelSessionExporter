@@ -675,6 +675,13 @@ extension NextLevelSessionExporter {
             }
         }
 
+        // If every audio track was filtered out above (e.g. asset only has APAC/spatial audio),
+        // there's nothing left for AVAssetReaderAudioMixOutput, which requires at least one track.
+        guard audioTracksToUse.count > 0 else {
+            self._audioOutput = nil
+            return
+        }
+
         self._audioOutput = AVAssetReaderAudioMixOutput(audioTracks: audioTracksToUse, audioSettings: nil)
         self._audioOutput?.alwaysCopiesSampleData = false
         self._audioOutput?.audioMix = self.audioMix
